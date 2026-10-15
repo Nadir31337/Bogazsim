@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BoğazSim — Maritime Hydrodynamics & Vessel Routing Simulator</title>
+    <!-- Tailwind CSS CDN for high-contrast dark mission-control styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        maritime: {
+                            deep: '#0b1329',
+                            water: '#0f172a',
+                            land: '#1e293b',
+                            cyan: '#38bdf8',
+                            emerald: '#34d399',
+                            amber: '#f59e0b',
+                            rose: '#f43f5e',
+                            violet: '#a78bfa'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+    <!-- Top Navigation & Telemetry Bar -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <span class="inline-block w-3 h-3 rounded-full bg-cyan-400 animate-pulse"></span>
+            <h1 class="text-lg font-bold tracking-wider text-slate-100 uppercase">
+                BoğazSim <span class="text-xs font-mono font-normal text-cyan-400 px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800">SEN4015</span>
+            </h1>
+            <span class="text-xs text-slate-400 hidden sm:inline">| Istanbul Bosphorus SAR Swarm & Routing</span>
+        </div>
+        <div class="flex items-center space-x-4 text-xs font-mono">
+            <div id="weather-pill" class="flex items-center space-x-2 px-2.5 py-1 rounded bg-slate-800 border border-slate-700">
+                <span class="text-slate-400">METEOROLOGY:</span>
+                <span id="weather-status" class="text-emerald-400 font-semibold">SYNTHETIC (POYRAZ)</span>
+            </div>
+            <div class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300">
+                <span>GRID: </span><span class="text-cyan-400">120×160</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Mission-Control Container -->
+    <main class="flex-1 p-4 grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <!-- Sidebar Controls Placeholder -->
+        <aside class="lg:col-span-1 bg-slate-900/60 rounded-lg border border-slate-800 p-4 flex flex-col space-y-4">
+            <div class="border-b border-slate-800 pb-2">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">Mission Controls</h2>
+                <p class="text-xs text-slate-500">Configure simulation parameters & dispatch swarms.</p>
+            </div>
+            <div id="controls-panel" class="space-y-3 text-xs">
+                <div class="p-3 rounded bg-slate-800/60 border border-slate-700/60 text-slate-400">
+                    Controls initialized. Ready for Phase 7 interactive UI components.
+                </div>
+            </div>
+        </aside>
+
+        <!-- Interactive Map & Canvas Viewport -->
+        <section class="lg:col-span-3 bg-slate-900/60 rounded-lg border border-slate-800 p-4 flex flex-col items-center justify-center relative overflow-hidden">
+            <div class="absolute top-4 left-4 z-10 px-3 py-1.5 rounded bg-slate-900/90 border border-slate-700/80 text-xs font-mono text-slate-300 flex items-center space-x-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span>CHART: BOSPHORUS STRAIT 40.98°N–41.25°N</span>
+            </div>
+            <canvas id="bosphorus-canvas" width="1280" height="720" class="max-w-full h-auto bg-slate-950 rounded border border-slate-800 shadow-2xl">
+                Your browser does not support HTML5 Canvas.
+            </canvas>
+        </section>
+    </main>
+
+    <!-- Telemetry Footer -->
+    <footer class="border-t border-slate-800 bg-slate-900/80 px-6 py-2 text-xs text-slate-500 flex justify-between items-center font-mono">
+        <div>BoğazSim v1.0.0 — SEN4015 Advanced Programming with Python</div>
+        <div>FastAPI + HTML5 Canvas + NumPy/Pandas Hydrodynamics</div>
+    </footer>
+</body>
+</html>
