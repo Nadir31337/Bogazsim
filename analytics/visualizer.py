@@ -15,9 +15,12 @@ from __future__ import annotations
 import base64
 import io
 import math
+import os
 from pathlib import Path
 import threading
 from typing import Any
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
 try:
     import matplotlib

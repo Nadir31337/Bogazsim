@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BoğazSim — Maritime Hydrodynamics & Vessel Routing Simulator</title>
+    <title>BoğazSim — Istanbul Bosphorus SAR Swarm & Vessel Routing Simulator</title>
     <!-- Tailwind CSS CDN for high-contrast dark mission-control styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -13,12 +13,12 @@
                 extend: {
                     colors: {
                         maritime: {
-                            deep: '#0b1329',
+                            deep: '#060b18',
                             water: '#0f172a',
-                            land: '#1e293b',
+                            panel: '#111e3b',
                             cyan: '#38bdf8',
                             emerald: '#34d399',
-                            amber: '#f59e0b',
+                            amber: '#fbbf24',
                             rose: '#f43f5e',
                             violet: '#a78bfa'
                         }
@@ -27,59 +27,331 @@
             }
         }
     </script>
+    <link rel="stylesheet" href="/static/css/styles.css?v=2">
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-cyan-500 selection:text-slate-950">
     <!-- Top Navigation & Telemetry Bar -->
-    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur px-6 py-3 flex items-center justify-between">
+    <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur px-6 py-2.5 flex items-center justify-between sticky top-0 z-30 shadow-md">
         <div class="flex items-center space-x-3">
             <span class="inline-block w-3 h-3 rounded-full bg-cyan-400 animate-pulse"></span>
             <h1 class="text-lg font-bold tracking-wider text-slate-100 uppercase">
                 BoğazSim <span class="text-xs font-mono font-normal text-cyan-400 px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800">SEN4015</span>
             </h1>
-            <span class="text-xs text-slate-400 hidden sm:inline">| Istanbul Bosphorus SAR Swarm & Routing</span>
+            <span class="text-xs text-slate-400 hidden sm:inline">| Istanbul Strait Hydrodynamics & SAR Passage Planner</span>
         </div>
-        <div class="flex items-center space-x-4 text-xs font-mono">
-            <div id="weather-pill" class="flex items-center space-x-2 px-2.5 py-1 rounded bg-slate-800 border border-slate-700">
+        <div class="flex items-center space-x-3 text-xs font-mono">
+            <!-- Header Live Weather Pill -->
+            <div id="weather-pill" class="flex items-center space-x-2 px-3 py-1 rounded bg-slate-800/90 border border-slate-700">
+                <span id="weather-indicator-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 <span class="text-slate-400">METEOROLOGY:</span>
-                <span id="weather-status" class="text-emerald-400 font-semibold">SYNTHETIC (POYRAZ)</span>
+                <span id="weather-status" class="text-emerald-400 font-semibold">POYRAZ (45° NE 8.5 m/s)</span>
+                <span id="weather-source-badge" class="text-[10px] uppercase px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-700 text-emerald-300">LIVE</span>
             </div>
-            <div class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300">
-                <span>GRID: </span><span class="text-cyan-400">120×160</span>
+            <button id="btn-sync-weather" title="Re-fetch live Open-Meteo wind data" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-cyan-400 transition-colors">
+                ↻ Sync API
+            </button>
+            <div class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 hidden lg:block">
+                <span>GRID: </span><span class="text-cyan-400">120×160 (250m)</span>
             </div>
         </div>
     </header>
 
     <!-- Main Mission-Control Container -->
-    <main class="flex-1 p-4 grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <!-- Sidebar Controls Placeholder -->
-        <aside class="lg:col-span-1 bg-slate-900/60 rounded-lg border border-slate-800 p-4 flex flex-col space-y-4">
-            <div class="border-b border-slate-800 pb-2">
-                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">Mission Controls</h2>
-                <p class="text-xs text-slate-500">Configure simulation parameters & dispatch swarms.</p>
+    <main class="flex-1 p-3 grid grid-cols-1 xl:grid-cols-12 gap-3 max-w-[2400px] mx-auto w-full">
+        <!-- Sidebar Controls (3 cols on XL) -->
+        <aside class="xl:col-span-3 lg:col-span-4 bg-slate-900/90 rounded-xl border border-slate-800 p-4 flex flex-col space-y-3.5 shadow-xl">
+            <!-- Navigation Tabs -->
+            <div class="flex border-b border-slate-800 text-xs font-medium space-x-1">
+                <button id="tab-btn-forward" class="tab-btn active px-3 py-2 transition-colors">Forward Swarm</button>
+                <button id="tab-btn-reverse" class="tab-btn px-3 py-2 transition-colors">Reverse Sighting</button>
+                <button id="tab-btn-route" class="tab-btn px-3 py-2 transition-colors">A* Passage</button>
+                <button id="tab-btn-analytics" class="tab-btn px-3 py-2 transition-colors">Charts & Data</button>
             </div>
-            <div id="controls-panel" class="space-y-3 text-xs">
-                <div class="p-3 rounded bg-slate-800/60 border border-slate-700/60 text-slate-400">
-                    Controls initialized. Ready for Phase 7 interactive UI components.
+
+            <!-- Dedicated Live Meteorology HUD Card -->
+            <div id="sidebar-weather-card" class="p-3 rounded-lg bg-slate-950/90 border border-slate-800 space-y-2">
+                <div class="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                    <div class="flex items-center space-x-2">
+                        <span id="sidebar-weather-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-300">Live Meteorology</span>
+                    </div>
+                    <span id="sidebar-weather-source" class="text-[10px] font-mono text-cyan-400 uppercase">OPEN-METEO API</span>
                 </div>
+                <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+                    <div class="space-y-0.5">
+                        <div class="text-[10px] text-slate-400">SECTOR / BEARING</div>
+                        <div id="wx-sector" class="text-emerald-400 font-bold text-sm">POYRAZ (NE)</div>
+                        <div id="wx-deg" class="text-slate-400 text-[11px]">Bearing: 45° True</div>
+                    </div>
+                    <div class="space-y-0.5">
+                        <div class="text-[10px] text-slate-400">WIND SPEED</div>
+                        <div id="wx-speed" class="text-cyan-400 font-bold text-sm">8.5 m/s</div>
+                        <div id="wx-knots" class="text-slate-400 text-[11px]">(16.5 kts)</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-900 text-[11px] font-mono text-slate-400">
+                    <div>Temp: <span id="wx-temp" class="text-slate-200">16.4°C</span></div>
+                    <div>Press: <span id="wx-press" class="text-slate-200">1014 hPa</span></div>
+                </div>
+            </div>
+
+            <!-- Panel 1: Forward Monte Carlo Swarm -->
+            <div id="panel-forward" class="space-y-3 text-xs">
+                <form id="form-forward" class="space-y-3">
+                    <div>
+                        <label class="block text-slate-400 mb-1">Drift Entity</label>
+                        <select id="fwd-entity" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-cyan-400">
+                            <option value="person">Person In Water (Low Windage, High Drag)</option>
+                            <option value="raft">Life Raft (Leeway Deflection ~0.04)</option>
+                            <option value="boat">Fishing Boat (Residual Rudder Drag)</option>
+                            <option value="oil">Oil Slick (Fay Gravity-Viscous Spreading)</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Origin Latitude (°N)</label>
+                            <input id="fwd-lat" type="number" step="0.0001" value="41.0850" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Origin Longitude (°E)</label>
+                            <input id="fwd-lon" type="number" step="0.0001" value="29.0786" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Particles ($N$)</label>
+                            <input id="fwd-particles" type="number" min="5" max="500" value="100" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Duration (Hours)</label>
+                            <input id="fwd-hours" type="number" step="0.5" min="0.5" max="24" value="4.0" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Time Step $\Delta t$ (s)</label>
+                            <input id="fwd-dt" type="number" step="1" min="1" max="60" value="10.0" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Integrator Scheme</label>
+                            <select id="fwd-integrator" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200">
+                                <option value="rk2">RK2 (Midpoint)</option>
+                                <option value="euler">Explicit Euler</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2 pt-1">
+                        <input id="fwd-beach" type="checkbox" checked class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                        <label for="fwd-beach" class="text-slate-300">Beach particles on shoreline collision</label>
+                    </div>
+                    <div class="flex items-center space-x-2 pt-1">
+                        <input id="fwd-use-live-wind" type="checkbox" checked class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                        <label for="fwd-use-live-wind" class="text-slate-300">Apply Live Wind Drift (Open-Meteo)</label>
+                    </div>
+                    <div id="fwd-oil-group" class="pt-1">
+                        <label class="block text-slate-400 mb-1">Oil Spill Volume ($m^3$)</label>
+                        <input id="fwd-spill" type="number" step="1" min="1" max="1000" value="10.0" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                    </div>
+                    <button type="submit" id="btn-submit-forward" class="w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold py-2 rounded transition-colors shadow-lg shadow-cyan-950/40">
+                        Launch Monte Carlo Swarm
+                    </button>
+                </form>
+            </div>
+
+            <!-- Panel 2: Reverse Datum Backtracking -->
+            <div id="panel-reverse" class="space-y-3 text-xs hidden">
+                <form id="form-reverse" class="space-y-3">
+                    <div>
+                        <label class="block text-slate-400 mb-1">Discovered Object</label>
+                        <select id="rev-entity" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200">
+                            <option value="raft">Life Raft</option>
+                            <option value="person">Person In Water</option>
+                            <option value="boat">Fishing Boat</option>
+                            <option value="oil">Oil Slick</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Sighting Lat (°N)</label>
+                            <input id="rev-lat" type="number" step="0.0001" value="41.0500" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Sighting Lon (°E)</label>
+                            <input id="rev-lon" type="number" step="0.0001" value="29.0620" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Particles ($N$)</label>
+                            <input id="rev-particles" type="number" min="5" max="300" value="50" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Backtrack (Hours)</label>
+                            <input id="rev-hours" type="number" step="0.5" min="0.5" max="24" value="3.0" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Time Step $\Delta t$ (s)</label>
+                            <input id="rev-dt" type="number" step="1" min="1" max="60" value="10.0" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Integrator</label>
+                            <select id="rev-integrator" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200">
+                                <option value="rk2">RK2 (Midpoint)</option>
+                                <option value="euler">Explicit Euler</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2 pt-1">
+                        <input id="rev-use-live-wind" type="checkbox" checked class="rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-0">
+                        <label for="rev-use-live-wind" class="text-slate-300">Apply Live Wind Drift (Open-Meteo)</label>
+                    </div>
+                    <button type="submit" id="btn-submit-reverse" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold py-2 rounded transition-colors shadow-lg shadow-amber-950/40">
+                        Invert Time (-$\Delta t$) & Locate Origin
+                    </button>
+                </form>
+            </div>
+
+            <!-- Panel 3: A* Passage Planner -->
+            <div id="panel-route" class="space-y-3 text-xs hidden">
+                <form id="form-route" class="space-y-3">
+                    <div class="flex space-x-2">
+                        <button type="button" id="btn-preset-northbound" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 py-1 rounded text-slate-300">
+                            Preset: Northbound (Against Current)
+                        </button>
+                        <button type="button" id="btn-preset-southbound" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 py-1 rounded text-slate-300">
+                            Preset: Southbound (With Current)
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Departure Lat</label>
+                            <input id="route-start-lat" type="number" step="0.0001" value="41.0100" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Departure Lon</label>
+                            <input id="route-start-lon" type="number" step="0.0001" value="29.0265" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Destination Lat</label>
+                            <input id="route-end-lat" type="number" step="0.0001" value="41.2000" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Destination Lon</label>
+                            <input id="route-end-lon" type="number" step="0.0001" value="29.0820" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Speed Through Water (kts)</label>
+                            <input id="route-speed" type="number" step="0.5" min="4" max="25" value="12.0" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Head Penalty $\lambda_{\text{head}}$</label>
+                            <input id="route-penalty" type="number" step="0.5" min="0" max="5" value="1.5" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                        </div>
+                    </div>
+                    <button type="submit" id="btn-submit-route" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold py-2 rounded transition-colors shadow-lg shadow-emerald-950/40">
+                        Compute Optimal Route (Weighted A*)
+                    </button>
+                </form>
+            </div>
+
+            <!-- Panel 4: Charts & Analytics -->
+            <div id="panel-analytics" class="space-y-3 text-xs hidden">
+                <div class="text-slate-400 mb-2">High-resolution dark oceanographic charts:</div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="openChartModal('quiver')" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 rounded text-slate-300 font-medium">
+                        Current Quiver Field
+                    </button>
+                    <button onclick="openChartModal('windrose')" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 rounded text-slate-300 font-medium">
+                        Istanbul Wind Rose
+                    </button>
+                    <button onclick="openChartModal('heatmap')" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 rounded text-slate-300 font-medium">
+                        Landing Heatmap
+                    </button>
+                    <button onclick="openChartModal('kde')" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 rounded text-slate-300 font-medium">
+                        Spatial KDE Cluster
+                    </button>
+                    <button onclick="openChartModal('distance_kde')" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 rounded text-slate-300 font-medium">
+                        Distance 1D KDE
+                    </button>
+                    <button onclick="openChartModal('route')" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2 rounded text-slate-300 font-medium">
+                        Route SOG Profile
+                    </button>
+                </div>
+                <div class="pt-2 border-t border-slate-800">
+                    <button id="btn-export-csv" class="w-full bg-slate-800 hover:bg-slate-700 border border-cyan-800/80 text-cyan-300 py-2 rounded font-semibold transition-colors">
+                        Export Simulation Telemetry to CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Telemetry HUD Card -->
+            <div id="telemetry-card" class="mt-auto p-3 rounded-lg bg-slate-950/80 border border-slate-800 text-slate-400">
+                <div class="text-xs font-semibold uppercase text-slate-300 mb-1">Awaiting Simulation</div>
+                <div class="text-xs">Dispatch a forward swarm, backtrack a datum, or calculate an A* passage to stream live telemetry.</div>
             </div>
         </aside>
 
-        <!-- Interactive Map & Canvas Viewport -->
-        <section class="lg:col-span-3 bg-slate-900/60 rounded-lg border border-slate-800 p-4 flex flex-col items-center justify-center relative overflow-hidden">
-            <div class="absolute top-4 left-4 z-10 px-3 py-1.5 rounded bg-slate-900/90 border border-slate-700/80 text-xs font-mono text-slate-300 flex items-center space-x-2">
-                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                <span>CHART: BOSPHORUS STRAIT 40.98°N–41.25°N</span>
+        <!-- Interactive Map & Canvas Viewport (9 cols on XL) -->
+        <section class="xl:col-span-9 lg:col-span-8 bg-slate-900/90 rounded-xl border border-slate-800 p-3.5 flex flex-col items-center justify-start relative overflow-hidden shadow-2xl min-h-[820px]">
+            <!-- Viewport Top Control Bar -->
+            <div class="w-full flex flex-wrap items-center justify-between gap-2 mb-2 z-10 px-1 font-mono text-xs">
+                <!-- Left Domain Info -->
+                <div class="px-3 py-1.5 rounded bg-slate-900/90 border border-slate-700 text-slate-300 flex items-center space-x-2 shadow backdrop-blur">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span class="font-semibold text-slate-100">BOSPHORUS STRAIT (40.98°N – 41.25°N)</span>
+                    <span class="text-slate-500 hidden sm:inline">| 30 km Maritime Digital Twin</span>
+                </div>
+
+                <!-- Layer Toggles -->
+                <div class="flex items-center space-x-1.5 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-[11px]">
+                    <button id="toggle-layer-landmarks" class="layer-pill active px-2.5 py-1 rounded transition-all">Landmarks & Bridges</button>
+                    <button id="toggle-layer-flow" class="layer-pill active px-2.5 py-1 rounded transition-all">Hydrodynamic Flow</button>
+                    <button id="toggle-layer-tss" class="layer-pill active px-2.5 py-1 rounded transition-all">TSS Shipping Lanes</button>
+                    <button id="toggle-layer-vectors" class="layer-pill px-2.5 py-1 rounded transition-all">Current Vectors</button>
+                    <button id="toggle-layer-wind" class="layer-pill active px-2.5 py-1 rounded transition-all">Wind Compass</button>
+                </div>
+
+                <!-- Right Cursor Telemetry -->
+                <div class="px-3 py-1.5 rounded bg-slate-900/90 border border-slate-700 text-slate-400 flex items-center space-x-2 shadow backdrop-blur">
+                    <span id="cursor-coords">41.0850°N, 29.0786°E | WATER (2.1 m/s)</span>
+                </div>
             </div>
-            <canvas id="bosphorus-canvas" width="1280" height="720" class="max-w-full h-auto bg-slate-950 rounded border border-slate-800 shadow-2xl">
-                Your browser does not support HTML5 Canvas.
-            </canvas>
+
+            <!-- HTML5 Maritime Canvas (Expanded 1400x950 resolution) -->
+            <div class="w-full flex-1 flex items-center justify-center relative bg-slate-950 rounded-lg border border-slate-800/90 overflow-hidden shadow-2xl">
+                <canvas id="bosphorus-canvas" width="1400" height="950" class="w-full max-w-full h-auto bg-slate-950 rounded-lg cursor-crosshair">
+                    Your browser does not support HTML5 Canvas.
+                </canvas>
+            </div>
         </section>
     </main>
 
+    <!-- Modal for High-Resolution Charts -->
+    <div id="chart-modal" class="fixed inset-0 z-50 bg-slate-950/80 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-700 rounded-xl max-w-3xl w-full p-4 space-y-3 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                <h3 id="modal-chart-title" class="font-mono text-xs font-semibold text-cyan-400 uppercase tracking-wider">Oceanographic Chart</h3>
+                <button onclick="closeChartModal()" class="text-slate-400 hover:text-slate-100 text-lg font-bold px-2">&times;</button>
+            </div>
+            <div class="flex items-center justify-center min-h-[400px]">
+                <img id="modal-chart-img" src="" alt="Oceanographic Chart" class="max-w-full h-auto rounded border border-slate-800">
+            </div>
+        </div>
+    </div>
+
     <!-- Telemetry Footer -->
-    <footer class="border-t border-slate-800 bg-slate-900/80 px-6 py-2 text-xs text-slate-500 flex justify-between items-center font-mono">
+    <footer class="border-t border-slate-800 bg-slate-900/90 px-6 py-2 text-xs text-slate-500 flex justify-between items-center font-mono">
         <div>BoğazSim v1.0.0 — SEN4015 Advanced Programming with Python</div>
-        <div>FastAPI + HTML5 Canvas + NumPy/Pandas Hydrodynamics</div>
+        <div class="text-slate-400">Click anywhere on canvas to inspect or auto-fill coordinates</div>
     </footer>
+
+    <!-- Client Scripts -->
+    <script src="/static/js/dashboard.js?v=2"></script>
 </body>
 </html>

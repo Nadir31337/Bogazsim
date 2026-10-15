@@ -11,12 +11,15 @@ reverse datum backtracking, A* vessel routing, analytics, and chart rendering.
 from __future__ import annotations
 
 import math
+import os
 import resource
 import sys
 import threading
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
