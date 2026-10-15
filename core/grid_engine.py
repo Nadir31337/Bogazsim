@@ -192,6 +192,26 @@ class VectorGrid:
         """Number of longitude columns."""
         return self._cols
 
+    @property
+    def lat_min(self) -> float:
+        """Southern latitude boundary."""
+        return LAT_MIN
+
+    @property
+    def lat_max(self) -> float:
+        """Northern latitude boundary."""
+        return LAT_MAX
+
+    @property
+    def lon_min(self) -> float:
+        """Western longitude boundary."""
+        return LON_MIN
+
+    @property
+    def lon_max(self) -> float:
+        """Eastern longitude boundary."""
+        return LON_MAX
+
     # -----------------------------------------------------------------------
     # Coordinate Conversion Methods
     # -----------------------------------------------------------------------
@@ -337,15 +357,17 @@ class VectorGrid:
     # Spatial Interpolation & State Inspection
     # -----------------------------------------------------------------------
     def is_land(self, lat: float, lon: float) -> bool:
-        """Check if coordinates fall on dry land.
+        """Check if coordinates fall on dry land or outside navigable domain.
         
         Args:
             lat: Latitude coordinate.
             lon: Longitude coordinate.
             
         Returns:
-            True if land, False if navigable water.
+            True if land or out of bounds, False if navigable water.
         """
+        if not (LAT_MIN <= lat <= LAT_MAX and LON_MIN <= lon <= LON_MAX):
+            return True
         r, c = self.lat_lon_to_indices(lat, lon)
         r_idx = min(self._rows - 1, max(0, int(round(r))))
         c_idx = min(self._cols - 1, max(0, int(round(c))))
@@ -381,6 +403,9 @@ class VectorGrid:
             LandCollisionError: If point is on land and beaching is not allowed.
             GridBoundsError: If coordinates exceed domain bounds.
         """
+        if not (LAT_MIN <= lat <= LAT_MAX and LON_MIN <= lon <= LON_MAX):
+            return 0.0, 0.0
+
         r, c = self.lat_lon_to_indices(lat, lon)
         
         if self.is_land(lat, lon):

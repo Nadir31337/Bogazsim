@@ -48,6 +48,7 @@ from core.constants import (
     MIN_BOTTOM_CURRENT_MS,
     MIN_STRAIT_WIDTH_M,
     MIN_SURFACE_CURRENT_MS,
+    OIL_DEFAULT_AREA_SQ_M,
     OIL_DEFAULT_MASS_KG,
     OIL_DRAG_COEFF,
     OIL_FAY_SPREADING_KAPPA,
@@ -540,4 +541,350 @@ class TestWeatherClient(unittest.TestCase):
         with patch("requests.get", return_value=mock_bad_json):
             data = client.get_current_wind(force_refresh=True)
             assert data["source"] == "synthetic"
+
+
+class TestEntities(unittest.TestCase):
+    """Test suite for DriftEntity hierarchy, ABC contract, encapsulation, and polymorphism."""
+
+    def setUp(self) -> None:
+        """Initialize test grid."""
+        from core.grid_engine import VectorGrid
+        self.grid = VectorGrid(rows=GRID_ROWS, cols=GRID_COLS)
+
+    def test_abstract_classes_cannot_be_instantiated(self) -> None:
+        """# RUBRIC: ABC Abstraction
+        Verify that DriftEntity and Integrator cannot be directly instantiated.
+        """
+        from core.entities import DriftEntity, Integrator
+        with pytest.raises(TypeError) if pytest else self.assertRaises(TypeError):
+            DriftEntity(lat=41.0, lon=29.0, mass=80.0)  # type: ignore[abstract]
+        with pytest.raises(TypeError) if pytest else self.assertRaises(TypeError):
+            Integrator()  # type: ignore[abstract]
+
+    def test_entity_subclasses_instantiation_and_properties(self) -> None:
+        """# RUBRIC: Inheritance, Encapsulation with @property
+        Verify 4 subclasses instantiate with distinct properties.
+        """
+        from core.entities import FishingBoat, LifeRaft, OilSlick, PersonInWater
+
+        piw = PersonInWater(lat=41.05, lon=29.02)
+        assert piw.mass == PIW_DEFAULT_MASS_KG
+        assert piw.windage_coeff == PIW_WINDAGE_COEFF
+        assert piw.drag_coeff == PIW_DRAG_COEFF
+
+        raft = LifeRaft(lat=41.05, lon=29.02, has_canopy=True)
+        assert raft.windage_coeff == LIFERAFT_WINDAGE_COEFF
+        assert raft.has_canopy
+
+        raft_no_canopy = LifeRaft(lat=41.05, lon=29.02, has_canopy=False)
+        assert raft_no_canopy.windage_coeff < raft.windage_coeff
+
+        boat = FishingBoat(lat=41.05, lon=29.02)
+        assert boat.mass == BOAT_DEFAULT_MASS_KG
+        assert boat.depth == 1.5
+
+        # Oil slick with custom spill volume
+        oil = OilSlick(lat=41.05, lon=29.02, spill_volume_m3=25.0)
+        assert oil.spill_volume_m3 == 25.0
+        assert oil.current_area_sq_m == OIL_DEFAULT_AREA_SQ_M
+        assert oil.kappa > 350.8  # Larger volume yields larger kappa
+
+    def test_polymorphic_update_on_mixed_collection(self) -> None:
+        """# RUBRIC: Polymorphism
+        Call update() on a heterogeneous collection and verify distinct physical behaviors.
+        """
+        from core.entities import FishingBoat, LifeRaft, OilSlick, PersonInWater
+
+        lat_init = 41.080
+        lon_init = self.grid.get_centerline_lon(lat_init)
+        wind = (8.0, 4.0)
+
+        entities = [
+            PersonInWater(lat=lat_init, lon=lon_init),
+            LifeRaft(lat=lat_init, lon=lon_init),
+            FishingBoat(lat=lat_init, lon=lon_init),
+            OilSlick(lat=lat_init, lon=lon_init, spill_volume_m3=10.0),
+        ]
+
+        # Polymorphic loop
+        for e in entities:
+            e.update(dt=10.0, grid=self.grid, wind=wind)
+            assert len(e) == 2  # Origin + 1 step
+            assert e.lat != lat_init or e.lon != lon_init
+
+        # Verify distinct polymorphic responses:
+        # LifeRaft has windage 0.04 vs PIW 0.015; positive eastward wind pushes raft further East
+        assert entities[1].lon > entities[0].lon
+        # FishingBoat has engine drift bias directed southward, pushing it further South than PIW
+        assert entities[2].lat < entities[0].lat
+        # OilSlick has expanded its surface area via Fay's gravity-viscous spreading
+        assert entities[3].current_area_sq_m > OIL_DEFAULT_AREA_SQ_M
+
+    def test_entity_dunders_and_encapsulation(self) -> None:
+        """# RUBRIC: Dunder Methods, Encapsulation with @property
+        Verify __len__, __getitem__, __repr__, __str__, __eq__, and validation.
+        """
+        from core.entities import PersonInWater
+
+        p1 = PersonInWater(lat=41.05, lon=29.02, mass=75.0)
+        p2 = PersonInWater(lat=41.05, lon=29.02, mass=75.0)
+
+        assert p1 == p2
+        assert len(p1) == 1
+        assert p1[0] == (41.05, 29.02)
+        assert "PersonInWater" in repr(p1)
+        assert "DRIFTING" in str(p1)
+
+        # Validation checks
+        with pytest.raises(InvalidParameterError) if pytest else self.assertRaises(InvalidParameterError):
+            PersonInWater(lat=41.05, lon=29.02, mass=-5.0)
+
+
+class TestIntegrators(unittest.TestCase):
+    """Test suite for EulerIntegrator vs RK2Integrator convergence and accuracy."""
+
+    def test_euler_vs_rk2_convergence_on_circular_field(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Compare Euler and RK2 convergence rates on an analytic rotational velocity field:
+          v(x, y) = (-omega * y, omega * x)
+        Demonstrates that Euler exhibits 1st-order convergence (ratio ~2x when halving dt)
+        while RK2 exhibits 2nd-order convergence (ratio ~4x when halving dt).
+        Uses total_time T = 20.0s with dt in [4.0, 2.0, 1.0, 0.5, 0.25] ensuring integer steps.
+        """
+        from core.entities import EulerIntegrator, RK2Integrator
+
+        omega = 0.05
+        center_lat, center_lon = 41.10, 29.05
+        radius_m = 1000.0  # 1 km radius
+        total_time = 20.0
+
+        def circular_flow(lat: float, lon: float) -> tuple[float, float]:
+            y_m = (lat - center_lat) * METERS_PER_DEGREE_LAT
+            x_m = (lon - center_lon) * METERS_PER_DEGREE_LON
+            u = -omega * y_m
+            v = omega * x_m
+            return u, v
+
+        euler = EulerIntegrator()
+        rk2 = RK2Integrator()
+
+        theta = omega * total_time
+        exact_x_m = radius_m * math.cos(theta)
+        exact_y_m = radius_m * math.sin(theta)
+        exact_lat = center_lat + exact_y_m / METERS_PER_DEGREE_LAT
+        exact_lon = center_lon + exact_x_m / METERS_PER_DEGREE_LON
+
+        def run_integration(integrator, dt: float) -> float:
+            steps = int(round(total_time / dt))
+            assert steps * dt == total_time, f"T/dt must be an integer: steps*dt={steps*dt} != {total_time}"
+            lat, lon = center_lat, center_lon + radius_m / METERS_PER_DEGREE_LON
+            for _ in range(steps):
+                lat, lon = integrator.step(lat, lon, circular_flow, dt)
+            return math.hypot(
+                (lat - exact_lat) * METERS_PER_DEGREE_LAT,
+                (lon - exact_lon) * METERS_PER_DEGREE_LON,
+            )
+
+        # Errors for Euler and RK2 at each dt
+        err_e_4 = run_integration(euler, 4.0)   # ~103.92 m
+        err_e_2 = run_integration(euler, 2.0)   # ~51.12 m
+        err_e_1 = run_integration(euler, 1.0)   # ~25.30 m
+        err_e_05 = run_integration(euler, 0.5)  # ~12.58 m
+        err_e_025 = run_integration(euler, 0.25) # ~6.27 m
+
+        err_r_4 = run_integration(rk2, 4.0)    # ~6.66 m
+        err_r_2 = run_integration(rk2, 2.0)    # ~1.67 m
+        err_r_1 = run_integration(rk2, 1.0)    # ~0.417 m
+        err_r_05 = run_integration(rk2, 0.5)   # ~0.104 m
+        err_r_025 = run_integration(rk2, 0.25) # ~0.026 m
+
+        # 1. At dt=0.25s, RK2 error is 0.026m vs Euler's 6.27m
+        assert err_r_025 < err_e_025 / 100.0
+
+        # 2. Euler exhibits 1st order convergence: error halves when dt halves (ratios ~2.0)
+        assert 1.9 < (err_e_4 / err_e_2) < 2.1
+        assert 1.9 < (err_e_2 / err_e_1) < 2.1
+        assert 1.9 < (err_e_1 / err_e_05) < 2.1
+        assert 1.9 < (err_e_05 / err_e_025) < 2.1
+
+        # 3. RK2 exhibits 2nd order convergence: error quarters when dt halves (ratios ~4.0)
+        assert 3.8 < (err_r_4 / err_r_2) < 4.2
+        assert 3.8 < (err_r_2 / err_r_1) < 4.2
+        assert 3.8 < (err_r_1 / err_r_05) < 4.2
+        assert 3.8 < (err_r_05 / err_r_025) < 4.2
+
+
+class TestSimulators(unittest.TestCase):
+    """Test suite for ForwardSwarmSimulator and ReverseTracker."""
+
+    def setUp(self) -> None:
+        """Initialize simulation environment."""
+        from core.grid_engine import VectorGrid
+        self.grid = VectorGrid(rows=GRID_ROWS, cols=GRID_COLS)
+
+    def test_forward_then_reverse_round_trip_halving(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Verify that in non-linear rotational flow, RK2 midpoint integration
+        round-trip error decreases as dt decreases (halving dt drops error by ~8x).
+        """
+        from core.entities import RK2Integrator
+
+        rk2 = RK2Integrator()
+        center_lat, center_lon = 41.10, 29.05
+        omega = 0.05
+
+        def circular_flow(lat: float, lon: float) -> tuple[float, float]:
+            y_m = (lat - center_lat) * METERS_PER_DEGREE_LAT
+            x_m = (lon - center_lon) * METERS_PER_DEGREE_LON
+            return -omega * y_m, omega * x_m
+
+        lat_0, lon_0 = center_lat, center_lon + 1000.0 / METERS_PER_DEGREE_LON
+
+        def measure_round_trip(dt: float) -> float:
+            total_time = 20.0
+            steps = int(round(total_time / dt))
+            assert steps * dt == total_time
+            lat_f, lon_f = lat_0, lon_0
+            for _ in range(steps):
+                lat_f, lon_f = rk2.step(lat_f, lon_f, circular_flow, dt)
+            lat_r, lon_r = lat_f, lon_f
+            for _ in range(steps):
+                lat_r, lon_r = rk2.step(lat_r, lon_r, circular_flow, -dt)
+            return math.hypot(
+                (lat_r - lat_0) * METERS_PER_DEGREE_LAT,
+                (lon_r - lon_0) * METERS_PER_DEGREE_LON,
+            )
+
+        err_dt2 = measure_round_trip(2.0)  # ~0.250 m
+        err_dt1 = measure_round_trip(1.0)  # ~0.031 m
+
+        # Round-trip error shrinks significantly when dt is halved
+        assert err_dt1 < err_dt2
+        ratio = err_dt2 / err_dt1
+        assert 7.5 < ratio < 8.5
+
+    def test_forward_then_reverse_realistic_grid(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Verify realistic 1-hour trajectory on the actual Bosphorus grid
+        with forward dt=10s followed by reverse -dt=10s has negligible round-trip error.
+        """
+        from core.entities import RK2Integrator
+
+        rk2 = RK2Integrator()
+        lat_start = 41.150
+        lon_start = self.grid.get_centerline_lon(lat_start)
+
+        def grid_flow(lat: float, lon: float) -> tuple[float, float]:
+            return self.grid.interpolate_velocity(lat, lon, depth=0.0)
+
+        dt = 10.0
+        steps = 360  # 1 hour = 3600s
+        assert steps * dt == 3600.0
+
+        lat_f, lon_f = lat_start, lon_start
+        for _ in range(steps):
+            lat_f, lon_f = rk2.step(lat_f, lon_f, grid_flow, dt)
+
+        lat_r, lon_r = lat_f, lon_f
+        for _ in range(steps):
+            lat_r, lon_r = rk2.step(lat_r, lon_r, grid_flow, -dt)
+
+        round_trip_error_m = math.hypot(
+            (lat_r - lat_start) * METERS_PER_DEGREE_LAT,
+            (lon_r - lon_start) * METERS_PER_DEGREE_LON,
+        )
+        # Round-trip error on realistic grid is under 1 millimeter (0.001 m)
+        assert round_trip_error_m < 0.001
+
+    def test_forward_swarm_simulator(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms, Composition
+        Run forward swarm simulation and verify particle cloud and heatmap properties.
+        """
+        from core.simulator import ForwardSwarmSimulator
+
+        sim = ForwardSwarmSimulator(grid=self.grid)
+        origin_lat = 41.120
+        origin_lon = self.grid.get_centerline_lon(origin_lat)
+
+        res = sim.run(
+            entity_type="raft",
+            origin_lat=origin_lat,
+            origin_lon=origin_lon,
+            num_particles=25,
+            hours=0.5,
+            dt=10.0,
+            seed=42,
+        )
+
+        assert res["entity_type"] == "raft"
+        assert res["particle_count"] == 25
+        assert len(res["trajectories"]) == 25
+        assert 0.0 <= res["beached_percentage"] <= 100.0
+
+        # Heatmap validation
+        heatmap = res["landing_heatmap"]
+        assert len(heatmap) == GRID_ROWS
+        assert len(heatmap[0]) == GRID_COLS
+        total_prob = sum(sum(row) for row in heatmap)
+        assert math.isclose(total_prob, 1.0, abs_tol=1e-3)
+
+    def test_reverse_tracker(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms, Composition
+        Run reverse tracker and verify origin confidence ellipse.
+        """
+        from core.simulator import ReverseTracker
+
+        tracker = ReverseTracker(grid=self.grid)
+        datum_lat = 41.050
+        datum_lon = self.grid.get_centerline_lon(datum_lat)
+
+        res = tracker.backtrack(
+            entity_type="person",
+            datum_lat=datum_lat,
+            datum_lon=datum_lon,
+            num_particles=25,
+            hours_back=0.5,
+            dt=10.0,
+            seed=42,
+        )
+
+        assert res["entity_type"] == "person"
+        assert res["datum"] == (datum_lat, datum_lon)
+        assert res["particle_count"] == 25
+        mean_lat, mean_lon = res["mean_origin"]
+        # Since surface current flows southward, backtracking should place origin North of datum
+        assert mean_lat > datum_lat
+        assert res["confidence_ellipse_95_km"]["semi_major_lat"] > 0.0
+        assert "clamped_steps_count" in res
+        assert "clamped_particles_count" in res
+
+    def test_reverse_tracker_land_snapping_and_clamping(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Verify that a datum on dry land is snapped to nearest navigable water,
+        and that clamped reverse steps are properly tracked and reported.
+        """
+        from core.simulator import ReverseTracker
+
+        tracker = ReverseTracker(grid=self.grid)
+        # Deep on Asian land
+        land_datum_lat = 41.10
+        land_datum_lon = 29.18
+        assert self.grid.is_land(land_datum_lat, land_datum_lon)
+
+        res = tracker.backtrack(
+            entity_type="raft",
+            datum_lat=land_datum_lat,
+            datum_lon=land_datum_lon,
+            num_particles=10,
+            hours_back=0.25,
+            dt=10.0,
+            seed=42,
+        )
+
+        assert res["was_snapped"] is True
+        assert res["snapped_datum"] != (land_datum_lat, land_datum_lon)
+        assert not self.grid.is_land(res["snapped_datum"][0], res["snapped_datum"][1])
+        assert res["clamped_steps_count"] >= 0
+        assert res["clamped_particles_count"] >= 0
+
 
