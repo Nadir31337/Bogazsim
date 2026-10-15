@@ -1,0 +1,25 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Project generated report assets & local data
+report_assets/
+
+# Environment and secrets
+.env
+.env.*
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
