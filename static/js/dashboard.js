@@ -170,31 +170,6 @@ function initMap() {
   // Render Bridges and TSS Lanes
   renderBridges();
   renderTSSLanes();
-}
-
-/**
- * Switch Active Basemap Layer (Dark / Satellite / Street)
- */
-function setBasemap(name) {
-  if (!state.baseLayers || !state.baseLayers[name] || state.activeBaseLayer === name) return;
-  state.map.removeLayer(state.baseLayers[state.activeBaseLayer]);
-  state.baseLayers[name].addTo(state.map);
-
-  // Keep particle canvas overlay on top of basemap
-  if (state.canvas && state.canvas.parentNode) {
-    state.canvas.parentNode.appendChild(state.canvas);
-  }
-  state.activeBaseLayer = name;
-
-  // Update UI pill buttons
-  ['dark', 'sat', 'osm'].forEach((b) => {
-    const el = document.getElementById(`btn-bm-${b}`);
-    if (el) {
-      if (b === name) el.classList.add('active');
-      else el.classList.remove('active');
-    }
-  });
-}
 
   // Map Click Listener to Set Form Coordinates
   state.map.on('click', (e) => {
@@ -250,6 +225,30 @@ function setBasemap(name) {
   // Re-seed wind particles on zoom or pan
   state.map.on('moveend', () => {
     initWindStreamlines();
+  });
+}
+
+/**
+ * Switch Active Basemap Layer (Dark / Satellite / Street)
+ */
+function setBasemap(name) {
+  if (!state.baseLayers || !state.baseLayers[name] || state.activeBaseLayer === name) return;
+  state.map.removeLayer(state.baseLayers[state.activeBaseLayer]);
+  state.baseLayers[name].addTo(state.map);
+
+  // Keep particle canvas overlay on top of basemap
+  if (state.canvas && state.canvas.parentNode) {
+    state.canvas.parentNode.appendChild(state.canvas);
+  }
+  state.activeBaseLayer = name;
+
+  // Update UI pill buttons
+  ['dark', 'sat', 'osm'].forEach((b) => {
+    const el = document.getElementById(`btn-bm-${b}`);
+    if (el) {
+      if (b === name) el.classList.add('active');
+      else el.classList.remove('active');
+    }
   });
 }
 
