@@ -1,5 +1,5 @@
-/* BoğazSim — Dark Maritime Mission-Control Stylesheet
- * Custom CSS complementing Tailwind CSS for canvas viewports, HUD panels, and nautical charts.
+/* BoğazSim — Zoom Earth Style Maritime GIS Stylesheet
+ * Custom styles complementing Leaflet and Tailwind CSS for authentic Bosphorus GIS visualization.
  */
 
 :root {
@@ -15,7 +15,7 @@
   --violet-accent: #a78bfa;
 }
 
-/* Custom Scrollbar for Mission Sidebar */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -34,26 +34,88 @@
   background: #475569;
 }
 
-/* Radar Sweep Animation for Top Telemetry Pulse */
-@keyframes radar-sweep {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
+/* Leaflet Dark Map Container */
+#bosphorus-map {
+  background-color: #060b18 !important;
+  font-family: inherit;
 }
 
-.animate-radar {
-  animation: radar-sweep 4s linear infinite;
+.leaflet-container {
+  background-color: #060b18 !important;
+  outline: none;
 }
 
-/* Canvas Viewport Glow and Maritime Borders */
-#bosphorus-canvas {
-  background-color: #030712;
-  box-shadow: inset 0 0 60px rgba(15, 23, 42, 0.95), 0 10px 40px rgba(0, 0, 0, 0.9);
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
+/* Zoom Earth Style District Badges */
+.zoom-district-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 9999px;
+  padding: 2px 7px 2px 8px;
+  color: #f1f5f9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6), 0 0 8px rgba(56, 189, 248, 0.15);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.zoom-district-badge:hover {
+  border-color: #38bdf8;
+  background: rgba(15, 23, 42, 0.98);
+  transform: translateY(-1px) scale(1.04);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.8), 0 0 12px rgba(56, 189, 248, 0.35);
+  z-index: 1000 !important;
+}
+
+.zoom-district-name {
+  color: #e2e8f0;
+  letter-spacing: 0.2px;
+}
+
+.zoom-wind-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(6, 78, 59, 0.85);
+  border: 1px solid rgba(52, 211, 153, 0.7);
+  color: #a7f3d0;
+  border-radius: 9999px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.zoom-wind-arrow {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 1;
+  transform-origin: center center;
+  transition: transform 0.4s ease;
+}
+
+/* Constriction / Fortress Badge */
+.zoom-narrows-badge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(88, 28, 28, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(244, 63, 94, 0.6);
+  border-radius: 6px;
+  padding: 2px 7px;
+  color: #fecdd3;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.3);
 }
 
 /* Layer Toggle Pills */
@@ -64,10 +126,10 @@
 }
 
 .layer-pill.active {
-  background-color: rgba(6, 78, 59, 0.5);
-  border: 1px solid rgba(52, 211, 153, 0.7);
+  background-color: rgba(6, 78, 59, 0.65);
+  border: 1px solid rgba(52, 211, 153, 0.8);
   color: #a7f3d0;
-  box-shadow: 0 0 10px rgba(52, 211, 153, 0.2);
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.25);
 }
 
 .layer-pill:not(.active) {
@@ -79,19 +141,6 @@
 .layer-pill:not(.active):hover {
   background-color: rgba(51, 65, 85, 0.8);
   color: #cbd5e1;
-}
-
-/* Glowing Waypoint Indicator */
-.glow-cyan {
-  box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
-}
-
-.glow-emerald {
-  box-shadow: 0 0 15px rgba(52, 211, 153, 0.4);
-}
-
-.glow-amber {
-  box-shadow: 0 0 15px rgba(251, 191, 36, 0.4);
 }
 
 /* Tab Navigation Active Indicator */
@@ -111,19 +160,38 @@
   border-color: #475569;
 }
 
-/* Input Range Slider Accent */
-input[type="range"] {
-  accent-color: #38bdf8;
+/* Leaflet Zoom Control Styling */
+.leaflet-bar {
+  border: 1px solid rgba(51, 65, 85, 0.8) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
+}
+
+.leaflet-bar a {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+  color: #38bdf8 !important;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #1e293b !important;
+  color: #ffffff !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(15, 23, 42, 0.85) !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+  border-radius: 4px;
+}
+
+.leaflet-control-attribution a {
+  color: #94a3b8 !important;
 }
 
 /* Chart Modal Overlay */
 #chart-modal {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-}
-
-/* Coordinate Crosshair Tooltip */
-#canvas-tooltip {
-  pointer-events: none;
-  transition: opacity 0.15s ease-in-out;
 }

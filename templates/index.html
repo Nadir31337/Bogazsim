@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BoğazSim — Istanbul Bosphorus SAR Swarm & Vessel Routing Simulator</title>
+    <!-- Leaflet CSS for Zoom Earth GIS Basemap -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <!-- Tailwind CSS CDN for high-contrast dark mission-control styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -27,7 +29,7 @@
             }
         }
     </script>
-    <link rel="stylesheet" href="/static/css/styles.css?v=2">
+    <link rel="stylesheet" href="/static/css/styles.css?v=3">
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-cyan-500 selection:text-slate-950">
     <!-- Top Navigation & Telemetry Bar -->
@@ -86,7 +88,7 @@
                     <div class="space-y-0.5">
                         <div class="text-[10px] text-slate-400">WIND SPEED</div>
                         <div id="wx-speed" class="text-cyan-400 font-bold text-sm">8.5 m/s</div>
-                        <div id="wx-knots" class="text-slate-400 text-[11px]">(16.5 kts)</div>
+                        <div id="wx-knots" class="text-slate-400 text-[11px]">(16.5 kts | 30.6 km/h)</div>
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-900 text-[11px] font-mono text-slate-400">
@@ -297,7 +299,7 @@
             </div>
         </aside>
 
-        <!-- Interactive Map & Canvas Viewport (9 cols on XL) -->
+        <!-- Interactive Zoom Earth GIS Viewport (9 cols on XL) -->
         <section class="xl:col-span-9 lg:col-span-8 bg-slate-900/90 rounded-xl border border-slate-800 p-3.5 flex flex-col items-center justify-start relative overflow-hidden shadow-2xl min-h-[820px]">
             <!-- Viewport Top Control Bar -->
             <div class="w-full flex flex-wrap items-center justify-between gap-2 mb-2 z-10 px-1 font-mono text-xs">
@@ -305,16 +307,15 @@
                 <div class="px-3 py-1.5 rounded bg-slate-900/90 border border-slate-700 text-slate-300 flex items-center space-x-2 shadow backdrop-blur">
                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                     <span class="font-semibold text-slate-100">BOSPHORUS STRAIT (40.98°N – 41.25°N)</span>
-                    <span class="text-slate-500 hidden sm:inline">| 30 km Maritime Digital Twin</span>
+                    <span class="text-slate-500 hidden sm:inline">| Real GIS Maritime Digital Twin</span>
                 </div>
 
                 <!-- Layer Toggles -->
                 <div class="flex items-center space-x-1.5 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-[11px]">
-                    <button id="toggle-layer-landmarks" class="layer-pill active px-2.5 py-1 rounded transition-all">Landmarks & Bridges</button>
-                    <button id="toggle-layer-flow" class="layer-pill active px-2.5 py-1 rounded transition-all">Hydrodynamic Flow</button>
+                    <button id="toggle-layer-wind-flow" class="layer-pill active px-2.5 py-1 rounded transition-all">Wind Streamlines</button>
+                    <button id="toggle-layer-districts" class="layer-pill active px-2.5 py-1 rounded transition-all">District Wind Badges</button>
+                    <button id="toggle-layer-bridges" class="layer-pill active px-2.5 py-1 rounded transition-all">Suspension Bridges</button>
                     <button id="toggle-layer-tss" class="layer-pill active px-2.5 py-1 rounded transition-all">TSS Shipping Lanes</button>
-                    <button id="toggle-layer-vectors" class="layer-pill px-2.5 py-1 rounded transition-all">Current Vectors</button>
-                    <button id="toggle-layer-wind" class="layer-pill active px-2.5 py-1 rounded transition-all">Wind Compass</button>
                 </div>
 
                 <!-- Right Cursor Telemetry -->
@@ -323,11 +324,40 @@
                 </div>
             </div>
 
-            <!-- HTML5 Maritime Canvas (Expanded 1400x950 resolution) -->
-            <div class="w-full flex-1 flex items-center justify-center relative bg-slate-950 rounded-lg border border-slate-800/90 overflow-hidden shadow-2xl">
-                <canvas id="bosphorus-canvas" width="1400" height="950" class="w-full max-w-full h-auto bg-slate-950 rounded-lg cursor-crosshair">
-                    Your browser does not support HTML5 Canvas.
-                </canvas>
+            <!-- Zoom Earth Map Container with Leaflet & Transparent Animation Overlay -->
+            <div id="map-container" class="w-full flex-1 relative bg-slate-950 rounded-lg border border-slate-800/90 overflow-hidden shadow-2xl min-h-[760px]">
+                <!-- Leaflet GIS Map with CartoDB Dark Basemap -->
+                <div id="bosphorus-map" class="w-full h-full min-h-[760px] z-0"></div>
+
+                <!-- 60 FPS Transparent Canvas Overlay for Zoom Earth Wind Streamlines & Swarms -->
+                <canvas id="anim-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-10"></canvas>
+
+                <!-- Zoom Earth Top Right Live Wind Speed Badge -->
+                <div id="zoom-wind-status-badge" class="absolute top-4 right-4 z-20 pointer-events-auto bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg px-3.5 py-2 shadow-2xl text-xs font-mono flex items-center space-x-2.5">
+                    <span class="text-slate-400">WIND:</span>
+                    <span id="zoom-wind-speed-val" class="font-bold text-cyan-300 text-sm">29 km/h</span>
+                    <span id="zoom-wind-arrow" class="inline-block transition-transform duration-500 font-bold text-amber-400 text-base">↓</span>
+                    <span id="zoom-wind-dir-name" class="font-semibold text-emerald-400">N (YILDIZ)</span>
+                </div>
+
+                <!-- Zoom Earth Bottom Left Wind Speed Color Scale Legend -->
+                <div class="absolute bottom-4 left-4 z-20 pointer-events-auto bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg p-2.5 shadow-2xl text-[11px] font-mono space-y-1.5 max-w-xs">
+                    <div class="flex justify-between items-center text-slate-300 font-semibold">
+                        <span>WIND VELOCITY</span>
+                        <span class="text-[10px] text-slate-400">km/h</span>
+                    </div>
+                    <!-- Color Bar Gradient matching Zoom Earth -->
+                    <div class="h-2.5 w-56 rounded-full" style="background: linear-gradient(to right, #6366f1 0%, #38bdf8 20%, #34d399 40%, #fbbf24 60%, #f97316 80%, #f43f5e 100%);"></div>
+                    <div class="flex justify-between text-[10px] text-slate-400 px-0.5">
+                        <span>0</span>
+                        <span>20</span>
+                        <span>40</span>
+                        <span>60</span>
+                        <span>80</span>
+                        <span>100</span>
+                        <span>120+</span>
+                    </div>
+                </div>
             </div>
         </section>
     </main>
@@ -348,10 +378,12 @@
     <!-- Telemetry Footer -->
     <footer class="border-t border-slate-800 bg-slate-900/90 px-6 py-2 text-xs text-slate-500 flex justify-between items-center font-mono">
         <div>BoğazSim v1.0.0 — SEN4015 Advanced Programming with Python</div>
-        <div class="text-slate-400">Click anywhere on canvas to inspect or auto-fill coordinates</div>
+        <div class="text-slate-400">Click anywhere on map to inspect or set coordinates</div>
     </footer>
 
+    <!-- Leaflet JS CDN -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- Client Scripts -->
-    <script src="/static/js/dashboard.js?v=2"></script>
+    <script src="/static/js/dashboard.js?v=3"></script>
 </body>
 </html>
