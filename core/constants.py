@@ -8,6 +8,7 @@ magic numbers should exist outside this module.
 
 from __future__ import annotations
 
+import math
 from typing import Final
 
 # ---------------------------------------------------------------------------
@@ -158,15 +159,15 @@ BOAT_DEFAULT_ENGINE_BIAS_MS: Final[float] = 0.20
 # RUBRIC: Hand-Written Algorithms
 # Spreading in Fay's gravity-viscous regime (Fay, J.A., "Physical Processes in the
 # Spread of Oil on a Water Surface", Proc. Joint Conf. Prevention & Control of Oil Spills, 1971):
-#   Radius:  r(t) = k2 * [ (Delta * g * V^2) / sqrt(nu_w) ]^(1/4) * t^(1/4)
-#   Area:    A(t) = pi * r(t)^2 = pi * k2^2 * sqrt( (Delta * g * V^2) / sqrt(nu_w) ) * sqrt(t)
+#   Radius:  r(t) = k2 * [ (Delta * g * V^2) / sqrt(nu_w) ]^(1/6) * t^(1/4)
+#   Area:    A(t) = pi * r(t)^2 = pi * k2^2 * [ (Delta * g * V^2) / sqrt(nu_w) ]^(1/3) * sqrt(t)
 #                 = A0 + kappa * sqrt(t)
 # where:
 #   Delta = (rho_w - rho_o) / rho_w (reduced relative buoyancy ratio)
-#   V = spill volume (default 10.0 m^3)
-#   g = 9.80665 m/s^2 (gravitational acceleration)
-#   nu_w = 1.0e-6 m^2/s (water kinematic viscosity at ~15°C)
-#   k2 = 1.45 (Fay empirical dimensionless constant)
+#   V = spill volume (m^3)
+#   g = gravitational acceleration (m/s^2)
+#   nu_w = kinematic viscosity of water (m^2/s)
+#   k2 = Fay empirical dimensionless constant (~1.45)
 OIL_DEFAULT_MASS_KG: Final[float] = 1000.0
 OIL_DEFAULT_AREA_SQ_M: Final[float] = 250.0
 OIL_WINDAGE_COEFF: Final[float] = 0.033
@@ -178,9 +179,30 @@ WATER_KINEMATIC_VISCOSITY_M2_S: Final[float] = 1.0e-6
 GRAVITATIONAL_ACCELERATION_MS2: Final[float] = 9.80665
 FAY_GRAVITY_VISCOUS_K2: Final[float] = 1.45
 
-# Derived Fay spreading coefficient: kappa = pi * k2^2 * sqrt( (Delta * g * V^2) / sqrt(nu_w) )
-# For V=10 m^3, Delta=(1015-860)/1015=0.1527, kappa ~= 2556.11 m^2 / s^(1/2)
-OIL_FAY_SPREADING_KAPPA: Final[float] = 2556.11
+
+def compute_fay_kappa(
+    volume_m3: float = OIL_SPILL_VOLUME_M3,
+    water_density: float = WATER_DENSITY_KG_M3,
+    oil_density: float = OIL_DENSITY_KG_M3,
+    nu_water: float = WATER_KINEMATIC_VISCOSITY_M2_S,
+    g: float = GRAVITATIONAL_ACCELERATION_MS2,
+    k2: float = FAY_GRAVITY_VISCOUS_K2,
+) -> float:
+    """Compute Fay's gravity-viscous spreading coefficient kappa dynamically.
+    
+    Physics Note:
+    Fay's (1971) spreading law in the gravity-viscous regime:
+      A(t) = A_0 + kappa * sqrt(t)
+    where kappa = pi * k2^2 * ((Delta * g * V^2) / sqrt(nu_w))^(1/3).
+    For default values (V=10 m^3, Delta=0.1527, nu=1e-6, k2=1.45), kappa ~= 350.78 m^2/s^(1/2).
+    """
+    delta = (water_density - oil_density) / water_density
+    bracket = (delta * g * (volume_m3 ** 2)) / math.sqrt(nu_water)
+    return math.pi * (k2 ** 2) * (bracket ** (1.0 / 3.0))
+
+
+# Derived dynamically in code from physical parameters (V=10 m^3, Delta=0.1527, etc.)
+OIL_FAY_SPREADING_KAPPA: Final[float] = compute_fay_kappa()
 OIL_EVAPORATION_RATE_PER_SEC: Final[float] = 0.00005  # Mass decay constant
 
 # ---------------------------------------------------------------------------
