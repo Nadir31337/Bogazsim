@@ -69,7 +69,7 @@ $$\mathbf{v}_{\text{total}} = \mathbf{v}_{\text{water}} + C_{\text{windage}} \ma
   1. `PersonInWater`: $C_{\text{windage}} \approx 0.015$, high hydrodynamic drag ($C_d \approx 1.0$), low mass ($80\text{ kg}$).
   2. `LifeRaft`: $C_{\text{windage}} \approx 0.040$, moderate drag ($C_d \approx 0.5$), higher leeway deflection.
   3. `FishingBoat`: $C_{\text{windage}} \approx 0.030$, partial residual propulsion / rudder drag drift bias.
-  4. `OilSlick`: $C_{\text{windage}} \approx 0.033$, models spreading area $A(t) = A_0 + \alpha t^{3/4}$ and mass loss via volatile evaporation.
+  4. `OilSlick`: $C_{\text{windage}} \approx 0.033$, models spreading area $A(t) = A_0 + \kappa \sqrt{t}$ (Fay gravity-viscous regime) and mass loss via volatile evaporation.
 
 ### 2.2 Numerical Integration (`core/entities.py` / `core/simulator.py`)
 - `EulerIntegrator`:
@@ -90,9 +90,12 @@ $$\mathbf{v}_{\text{total}} = \mathbf{v}_{\text{water}} + C_{\text{windage}} \ma
 
 ### 2.4 Route Optimizer (`core/route_optimizer.py`)
 - Weighted A* search over the water graph.
-- Cost function between adjacent nodes $n_1 \to n_2$:
+- Speed Over Ground (SOG) along unit edge direction $\hat{\mathbf{u}}$:
+  $$V_{\text{vessel\_ground}} = V_{\text{engine}} + \mathbf{v}_{\text{water}} \cdot \hat{\mathbf{u}}$$
+- **Impassable Edge Rule**: If $V_{\text{vessel\_ground}} \le 0$ (current overcomes vessel forward speed), the edge is impassable (infinite cost / skipped).
+- Cost function between adjacent navigable nodes $n_1 \to n_2$:
   $$\text{cost} = \frac{d(n_1, n_2)}{V_{\text{vessel\_ground}}} + \lambda_{\text{head}} \max(0, -\mathbf{v}_{\text{water}} \cdot \hat{\mathbf{u}})$$
-  where $\hat{\mathbf{u}}$ is unit travel vector, $V_{\text{vessel\_ground}} = V_{\text{engine}} + \mathbf{v}_{\text{water}} \cdot \hat{\mathbf{u}}$.
+  where $\lambda_{\text{head}}$ is a linear penalty coefficient for opposing current resistance.
 - Admissible Heuristic:
   $$h(n) = \frac{\text{haversine\_distance}(n, \text{goal})}{V_{\text{vessel\_max}} + V_{\text{current\_max}}}$$
   Guaranteeing $h(n) \le c^*(n, \text{goal})$ for optimality.
@@ -117,15 +120,18 @@ All endpoints use Pydantic v2 schemas:
 5. `POST /api/simulate/forward`:
    - Input: `entity_type`, `lat`, `lon`, `particles` ($1-500$), `hours` ($0.5-24$), `integrator` (`euler` | `rk2`), optional `wind_override`.
    - Output: particle trajectories, bounding boxes, beached summary, landing probability matrix.
+   - Stores result in global in-memory state.
 6. `POST /api/simulate/reverse`:
    - Input: `entity_type`, `last_lat`, `last_lon`, `particles`, `hours_back`, `integrator`.
    - Output: origin distribution cloud, mean origin coordinate, 95% confidence ellipse.
+   - Stores result in global in-memory state.
 7. `POST /api/route`:
    - Input: `start_lat`, `start_lon`, `end_lat`, `end_lon`, `vessel_speed_knots`.
    - Output: waypoint coordinates, total distance (km), ETA (minutes), fuel cost proxy, nodes expanded.
-8. `GET /api/analytics/summary`: Aggregate metrics across recent simulations.
+   - Stores result in global in-memory state.
+8. `GET /api/analytics/summary`: Aggregate metrics across recent simulations (returns 404 if no simulation has been run yet).
 9. `GET /api/analytics/chart/{name}`: Base64-encoded dark-mode chart (`heatmap`, `quiver`, `windrose`, `kde`, `route`).
-10. `GET /api/export/csv`: Export simulation trajectories as downloadable CSV.
+10. `GET /api/export/csv`: Export simulation trajectories as downloadable CSV (returns 404 if no simulation has been run yet).
 
 ---
 
