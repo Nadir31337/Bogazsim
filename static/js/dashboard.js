@@ -94,34 +94,81 @@ const BOSPHORUS_STATIONS = [
 const BOSPHORUS_BRIDGES = [
   {
     name: 'Yavuz Sultan Selim Köprüsü (3. Köprü)',
-    coords: [[41.2025, 29.1020], [41.2035, 29.1320]],
+    coords: [[41.2052, 29.1090], [41.2012, 29.1275]], // Garipçe (NW) to Poyrazköy (SE)
     color: '#f59e0b',
   },
   {
     name: 'Fatih Sultan Mehmet Köprüsü (FSM / 2. Köprü)',
-    coords: [[41.0910, 29.0555], [41.0915, 29.0725]],
+    coords: [[41.0915, 29.0560], [41.0910, 29.0685]], // Hisarüstü (W) to Kavacık (E)
     color: '#38bdf8',
   },
   {
     name: '15 Temmuz Şehitler Köprüsü (1. Köprü)',
-    coords: [[41.0450, 29.0255], [41.0455, 29.0445]],
+    coords: [[41.0455, 29.0275], [41.0435, 29.0395]], // Ortaköy (W) to Beylerbeyi (E)
     color: '#34d399',
   },
 ];
 
 /**
- * International TSS Fairways
+ * International TSS Fairways (Authentic 26-Point Bosphorus Channel Geometry)
+ * COLREGS-compliant lanes following the curved fairway contours without intersecting land.
  */
 const TSS_NORTHBOUND = [
-  [40.990, 29.025], [41.025, 29.020], [41.045, 29.038],
-  [41.075, 29.062], [41.090, 29.068], [41.135, 29.085],
-  [41.170, 29.070], [41.205, 29.120], [41.235, 29.135],
+  [40.9750, 28.9890], // Marmara Sea South Approach
+  [40.9950, 29.0140], // Kadıköy outer fairway
+  [41.0180, 29.0100], // Salacak
+  [41.0250, 29.0160], // Kız Kulesi offing
+  [41.0400, 29.0300], // Üsküdar
+  [41.0448, 29.0360], // 15 Temmuz Bridge east span
+  [41.0530, 29.0420], // Çengelköy
+  [41.0620, 29.0460], // Vaniköy
+  [41.0720, 29.0510], // Kandilli
+  [41.0800, 29.0530], // Aşiyan offing
+  [41.0855, 29.0580], // Anadolu Hisarı (Narrows)
+  [41.0912, 29.0645], // FSM Bridge east span
+  [41.0990, 29.0665], // Kanlıca
+  [41.1100, 29.0675], // Çubuklu
+  [41.1180, 29.0730], // Paşabahçe
+  [41.1250, 29.0800], // Paşabahçe north
+  [41.1380, 29.0735], // Beykoz
+  [41.1480, 29.0620], // Umuryeri
+  [41.1560, 29.0560], // Umuryeri north
+  [41.1640, 29.0570], // Selvi Burnu
+  [41.1730, 29.0640], // Yuşa Tepesi offing
+  [41.1850, 29.0900], // Anadolu Kavağı
+  [41.1960, 29.1070], // Mezar Burnu
+  [41.2030, 29.1230], // YSS Bridge east span
+  [41.2250, 29.1270], // Poyrazköy
+  [41.2450, 29.1300], // Black Sea North Entrance
 ];
 
 const TSS_SOUTHBOUND = [
-  [41.235, 29.105], [41.205, 29.105], [41.170, 29.055],
-  [41.135, 29.065], [41.090, 29.058], [41.075, 29.048],
-  [41.045, 29.028], [41.025, 29.008], [40.990, 29.005],
+  [41.2450, 29.1200], // Black Sea North Entrance
+  [41.2250, 29.1180], // Rumelifeneri offing
+  [41.2030, 29.1130], // YSS Bridge west span
+  [41.1960, 29.0980], // Altınkum
+  [41.1850, 29.0810], // Rumeli Kavağı
+  [41.1730, 29.0570], // Sarıyer offing
+  [41.1640, 29.0510], // Büyükdere
+  [41.1560, 29.0500], // Kefeliköy
+  [41.1480, 29.0550], // Kireçburnu
+  [41.1380, 29.0630], // Tarabya
+  [41.1250, 29.0720], // Yeniköy
+  [41.1180, 29.0660], // İstinye offing
+  [41.1100, 29.0610], // Emirgan
+  [41.0990, 29.0600], // Baltalimanı
+  [41.0912, 29.0595], // FSM Bridge west span
+  [41.0855, 29.0535], // Rumeli Hisarı (Narrows)
+  [41.0800, 29.0480], // Bebek
+  [41.0720, 29.0460], // Akıntı Burnu
+  [41.0620, 29.0410], // Kuruçeşme
+  [41.0530, 29.0370], // Ortaköy
+  [41.0448, 29.0310], // 15 Temmuz Bridge west span
+  [41.0400, 29.0230], // Beşiktaş
+  [41.0250, 29.0090], // Karaköy
+  [41.0180, 29.0030], // Sarayburnu
+  [40.9950, 29.0060], // Ahırkapı
+  [40.9750, 28.9810], // Marmara Sea South Approach
 ];
 
 /**
@@ -1013,19 +1060,19 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('form-reverse')?.addEventListener('submit', handleReverseSubmit);
   document.getElementById('form-route')?.addEventListener('submit', handleRouteSubmit);
 
-  // Preset buttons
+  // Preset buttons (Authentic Navigable Fairway Endpoints)
   document.getElementById('btn-preset-northbound')?.addEventListener('click', () => {
-    document.getElementById('route-start-lat').value = '41.0100';
-    document.getElementById('route-start-lon').value = '29.0265';
-    document.getElementById('route-end-lat').value = '41.2000';
-    document.getElementById('route-end-lon').value = '29.0820';
+    document.getElementById('route-start-lat').value = '40.9950';
+    document.getElementById('route-start-lon').value = '29.0100';
+    document.getElementById('route-end-lat').value = '41.2250';
+    document.getElementById('route-end-lon').value = '29.1220';
   });
 
   document.getElementById('btn-preset-southbound')?.addEventListener('click', () => {
-    document.getElementById('route-start-lat').value = '41.2000';
-    document.getElementById('route-start-lon').value = '29.0820';
-    document.getElementById('route-end-lat').value = '41.0100';
-    document.getElementById('route-end-lon').value = '29.0265';
+    document.getElementById('route-start-lat').value = '41.2250';
+    document.getElementById('route-start-lon').value = '29.1220';
+    document.getElementById('route-end-lat').value = '40.9950';
+    document.getElementById('route-end-lon').value = '29.0100';
   });
 
   // Export CSV

@@ -29,7 +29,7 @@
             }
         }
     </script>
-    <link rel="stylesheet" href="/static/css/styles.css?v=5">
+    <link rel="stylesheet" href="/static/css/styles.css?v=6">
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-cyan-500 selection:text-slate-950">
     <!-- Top Navigation & Telemetry Bar -->
@@ -112,11 +112,11 @@
                     <div class="grid grid-cols-2 gap-2">
                         <div>
                             <label class="block text-slate-400 mb-1">Origin Latitude (°N)</label>
-                            <input id="fwd-lat" type="number" step="0.0001" value="41.0850" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                            <input id="fwd-lat" type="number" step="0.0001" value="41.0855" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                         <div>
                             <label class="block text-slate-400 mb-1">Origin Longitude (°E)</label>
-                            <input id="fwd-lon" type="number" step="0.0001" value="29.0786" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                            <input id="fwd-lon" type="number" step="0.0001" value="29.0555" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-2">
@@ -175,11 +175,11 @@
                     <div class="grid grid-cols-2 gap-2">
                         <div>
                             <label class="block text-slate-400 mb-1">Sighting Lat (°N)</label>
-                            <input id="rev-lat" type="number" step="0.0001" value="41.0500" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                            <input id="rev-lat" type="number" step="0.0001" value="41.0450" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                         <div>
                             <label class="block text-slate-400 mb-1">Sighting Lon (°E)</label>
-                            <input id="rev-lon" type="number" step="0.0001" value="29.0620" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                            <input id="rev-lon" type="number" step="0.0001" value="29.0340" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-2">
@@ -229,21 +229,21 @@
                     <div class="grid grid-cols-2 gap-2">
                         <div>
                             <label class="block text-slate-400 mb-1">Departure Lat</label>
-                            <input id="route-start-lat" type="number" step="0.0001" value="41.0100" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                            <input id="route-start-lat" type="number" step="0.0001" value="40.9950" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                         <div>
                             <label class="block text-slate-400 mb-1">Departure Lon</label>
-                            <input id="route-start-lon" type="number" step="0.0001" value="29.0265" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                            <input id="route-start-lon" type="number" step="0.0001" value="29.0100" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <div>
                             <label class="block text-slate-400 mb-1">Destination Lat</label>
-                            <input id="route-end-lat" type="number" step="0.0001" value="41.2000" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                            <input id="route-end-lat" type="number" step="0.0001" value="41.2250" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                         <div>
                             <label class="block text-slate-400 mb-1">Destination Lon</label>
-                            <input id="route-end-lon" type="number" step="0.0001" value="29.0820" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
+                            <input id="route-end-lon" type="number" step="0.0001" value="29.1220" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-2">
@@ -252,7 +252,7 @@
                             <input id="route-speed" type="number" step="0.5" min="4" max="25" value="12.0" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                         <div>
-                            <label class="block text-slate-400 mb-1">Head Penalty $\lambda_{\text{head}}$</label>
+                            <label class="block text-slate-400 mb-1">Head Current Penalty (λ)</label>
                             <input id="route-penalty" type="number" step="0.5" min="0" max="5" value="1.5" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                     </div>
@@ -392,6 +392,6 @@
     <!-- Leaflet JS CDN -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- Client Scripts -->
-    <script src="/static/js/dashboard.js?v=5"></script>
+    <script src="/static/js/dashboard.js?v=6"></script>
 </body>
 </html>
