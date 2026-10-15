@@ -8,6 +8,7 @@ using deterministic parameters and mocked dependencies where applicable.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -1212,6 +1213,288 @@ class TestRouteOptimizer(unittest.TestCase):
         # diagonal is blocked, so path must step orthogonally through (1, 0) -> (1, 1) (3 waypoints).
         assert len(route) == 3
         assert waypoints_int == [(0, 0), (1, 0), (1, 1)]
+
+
+class TestSimulationDataProcessor(unittest.TestCase):
+    """Test suite for SimulationDataProcessor Pandas pipelines and statistics.
+
+    # RUBRIC: Data Analysis Domain
+    # RUBRIC: Trajectory Resampling
+    # RUBRIC: Rolling Statistics
+    # RUBRIC: Group-By Aggregation
+    """
+
+    def setUp(self) -> None:
+        """Initialize data processor and test trajectory samples."""
+        from analytics.data_processor import SimulationDataProcessor
+        self.processor = SimulationDataProcessor()
+        # Mock 2-particle 4-step trajectory
+        self.sample_trajectories = [
+            [(41.050, 29.020), (41.051, 29.021), (41.052, 29.022), (41.053, 29.023)],
+            [(41.060, 29.030), (41.061, 29.031), (41.062, 29.032), (41.063, 29.033)],
+        ]
+        self.sample_final_positions = [
+            (41.053, 29.023, False),
+            (41.063, 29.033, True),
+        ]
+
+    def test_swarm_to_dataframe(self) -> None:
+        """Verify conversion of particle trajectories to structured DataFrame."""
+        df = self.processor.swarm_to_dataframe(
+            self.sample_trajectories,
+            dt=10.0,
+            final_positions=self.sample_final_positions,
+        )
+        assert len(df) == 8
+        assert "particle_id" in df.columns
+        assert "step" in df.columns
+        assert "time_seconds" in df.columns
+        assert "speed_ms" in df.columns
+        assert "is_beached" in df.columns
+        # Particle 0 never beached, Particle 1 beached at step 3
+        assert df[(df["particle_id"] == 1) & (df["step"] == 3)]["is_beached"].iloc[0] == True
+        assert df[(df["particle_id"] == 0) & (df["step"] == 3)]["is_beached"].iloc[0] == False
+
+    def test_route_to_dataframe(self) -> None:
+        """Verify conversion of navigation waypoints to DataFrame."""
+        waypoints = [
+            {"lat": 41.01, "lon": 28.98, "sog_ms": 3.0, "sog_knots": 5.8, "cumulative_distance_km": 0.0, "cumulative_time_min": 0.0, "fuel_proxy": 0.0},
+            {"lat": 41.05, "lon": 29.02, "sog_ms": 3.5, "sog_knots": 6.8, "cumulative_distance_km": 5.2, "cumulative_time_min": 25.0, "fuel_proxy": 12.5},
+        ]
+        df = self.processor.route_to_dataframe(waypoints)
+        assert len(df) == 2
+        assert list(df["waypoint_index"].values) == [0, 1]
+        assert df["cumulative_distance_km"].iloc[1] == 5.2
+
+    def test_rolling_statistics_and_heading(self) -> None:
+        """Verify rolling velocity averages and heading calculations."""
+        df = self.processor.swarm_to_dataframe(self.sample_trajectories, dt=10.0)
+        df_rolled = self.processor.compute_rolling_statistics(df, window=2)
+
+        assert "rolling_mean_speed" in df_rolled.columns
+        assert "cumulative_distance_km" in df_rolled.columns
+        assert "heading_deg" in df_rolled.columns
+        # Heading from (41.050, 29.020) to (41.051, 29.021) should be NE (~38° - 45°)
+        p0_step1_hdg = df_rolled[(df_rolled["particle_id"] == 0) & (df_rolled["step"] == 1)]["heading_deg"].iloc[0]
+        assert 20.0 <= p0_step1_hdg <= 70.0
+
+    def test_compass_bearing_cardinal_directions(self) -> None:
+        """Verify compass bearing calculation: due north=0, east=90, south=180, west=270."""
+        cardinal_trajectories = [
+            [(41.050, 29.020), (41.060, 29.020)],  # Due North: dlat > 0, dlon = 0
+            [(41.050, 29.020), (41.050, 29.030)],  # Due East: dlat = 0, dlon > 0
+            [(41.050, 29.020), (41.040, 29.020)],  # Due South: dlat < 0, dlon = 0
+            [(41.050, 29.020), (41.050, 29.010)],  # Due West: dlat = 0, dlon < 0
+        ]
+        df = self.processor.swarm_to_dataframe(cardinal_trajectories, dt=10.0)
+        df_rolled = self.processor.compute_rolling_statistics(df, window=1)
+
+        north_hdg = df_rolled[(df_rolled["particle_id"] == 0) & (df_rolled["step"] == 1)]["heading_deg"].iloc[0]
+        east_hdg = df_rolled[(df_rolled["particle_id"] == 1) & (df_rolled["step"] == 1)]["heading_deg"].iloc[0]
+        south_hdg = df_rolled[(df_rolled["particle_id"] == 2) & (df_rolled["step"] == 1)]["heading_deg"].iloc[0]
+        west_hdg = df_rolled[(df_rolled["particle_id"] == 3) & (df_rolled["step"] == 1)]["heading_deg"].iloc[0]
+
+        assert math.isclose(north_hdg, 0.0, abs_tol=1e-5), f"Expected 0.0 for North, got {north_hdg}"
+        assert math.isclose(east_hdg, 90.0, abs_tol=1e-5), f"Expected 90.0 for East, got {east_hdg}"
+        assert math.isclose(south_hdg, 180.0, abs_tol=1e-5), f"Expected 180.0 for South, got {south_hdg}"
+        assert math.isclose(west_hdg, 270.0, abs_tol=1e-5), f"Expected 270.0 for West, got {west_hdg}"
+
+    def test_resample_trajectories(self) -> None:
+        """Verify temporal downsampling of trajectory records."""
+        df = self.processor.swarm_to_dataframe(self.sample_trajectories, dt=10.0)
+        resampled = self.processor.resample_trajectories(df, sample_step=2)
+        # Should keep steps 0 and 2 for each particle (4 rows total)
+        assert len(resampled) == 4
+        assert set(resampled["step"].unique()) == {0, 2}
+
+    def test_summarize_by_particle(self) -> None:
+        """Verify group-by aggregation across individual particles."""
+        df = self.processor.swarm_to_dataframe(
+            self.sample_trajectories,
+            dt=10.0,
+            final_positions=self.sample_final_positions,
+        )
+        summary = self.processor.summarize_by_particle(df)
+        assert len(summary) == 2
+        assert 0 in summary.index and 1 in summary.index
+        assert summary.loc[0, "final_beached"] == False
+        assert summary.loc[1, "final_beached"] == True
+        assert summary.loc[0, "mean_speed_ms"] >= 0.0
+
+    def test_compute_beaching_statistics(self) -> None:
+        """Verify beaching percentage and landing centroid calculation."""
+        df = self.processor.swarm_to_dataframe(
+            self.sample_trajectories,
+            dt=10.0,
+            final_positions=self.sample_final_positions,
+        )
+        stats = self.processor.compute_beaching_statistics(df)
+        assert stats["total_particles"] == 2
+        assert stats["beached_count"] == 1
+        assert stats["beached_percentage"] == 50.0
+        assert stats["landing_centroid"] == (41.063, 29.033)
+
+    def test_export_csv(self) -> None:
+        """Verify CSV export formatting."""
+        df = self.processor.swarm_to_dataframe(self.sample_trajectories, dt=10.0)
+        csv_str = self.processor.export_csv(df)
+        assert "particle_id,step,time_seconds" in csv_str
+        assert "41.05000" in csv_str
+
+    def test_generate_summary_metrics(self) -> None:
+        """Verify summary metrics for forward, reverse, and route simulations."""
+        fwd_res = {
+            "entity_type": "life_raft",
+            "particle_count": 50,
+            "duration_hours": 4.0,
+            "beached_count": 10,
+            "beached_percentage": 20.0,
+        }
+        fwd_summary = self.processor.generate_summary_metrics(fwd_res)
+        assert fwd_summary["simulation_type"] == "forward_swarm"
+        assert fwd_summary["particle_count"] == 50
+
+        rev_res = {
+            "entity_type": "person",
+            "mean_origin": (41.10, 29.05),
+            "hours_back": 3.0,
+            "particle_count": 25,
+            "confidence_ellipse_95_km": {"semi_major_lat": 1.2, "semi_minor_lon": 0.8},
+        }
+        rev_summary = self.processor.generate_summary_metrics(rev_res)
+        assert rev_summary["simulation_type"] == "reverse_tracking"
+        assert rev_summary["mean_origin"] == (41.10, 29.05)
+
+        route_res = {
+            "total_distance_km": 15.2,
+            "eta_minutes": 35.4,
+            "fuel_proxy": 14.8,
+            "waypoints": [(41.0, 28.98), (41.1, 29.05)],
+            "nodes_expanded": 450,
+        }
+        route_summary = self.processor.generate_summary_metrics(route_res)
+        assert route_summary["simulation_type"] == "vessel_route"
+        assert route_summary["total_distance_km"] == 15.2
+
+    def test_invalid_parameters_raise_errors(self) -> None:
+        """Verify input validation catches empty or invalid parameters."""
+        from core.exceptions import InvalidParameterError
+        with pytest.raises(InvalidParameterError) if pytest else self.assertRaises(InvalidParameterError):
+            self.processor.swarm_to_dataframe([])
+        with pytest.raises(InvalidParameterError) if pytest else self.assertRaises(InvalidParameterError):
+            self.processor.route_to_dataframe([])
+        with pytest.raises(InvalidParameterError) if pytest else self.assertRaises(InvalidParameterError):
+            df = self.processor.swarm_to_dataframe(self.sample_trajectories)
+            self.processor.compute_rolling_statistics(df, window=0)
+
+
+class TestMaritimeVisualizer(unittest.TestCase):
+    """Test suite for MaritimeVisualizer dark-themed charts and Base64 export.
+
+    # RUBRIC: Dark-Themed Matplotlib/Seaborn Engine
+    # RUBRIC: Visualizer
+    """
+
+    def setUp(self) -> None:
+        """Initialize visualizer instance."""
+        from analytics.visualizer import MaritimeVisualizer
+        self.visualizer = MaritimeVisualizer()
+
+    def test_theme_initialization(self) -> None:
+        """Verify dark theme palette constants."""
+        assert self.visualizer.BG_COLOR == "#0f172a"
+        assert self.visualizer.CYAN_ACCENT == "#06b6d4"
+        assert self.visualizer.EMERALD_ACCENT == "#10b981"
+
+    def test_generate_heatmap(self) -> None:
+        """Verify 2D landing probability heatmap generation and Base64 output."""
+        mat = [[0.01 * (i + j) for j in range(10)] for i in range(10)]
+        _, b64 = self.visualizer.generate_heatmap(mat)
+        assert isinstance(b64, str)
+        assert b64.startswith("data:image/png;base64,")
+        assert len(b64) > 100
+
+    def test_generate_quiver(self) -> None:
+        """Verify surface current quiver vector field generation."""
+        from core.grid_engine import VectorGrid
+        grid = VectorGrid(rows=GRID_ROWS, cols=GRID_COLS)
+        _, b64 = self.visualizer.generate_quiver(grid, subsample=20)
+        assert isinstance(b64, str)
+        assert b64.startswith("data:image/png;base64,")
+        assert len(b64) > 100
+
+    def test_generate_windrose(self) -> None:
+        """Verify polar wind rose generation."""
+        mock_winds = [
+            {"direction": 45.0, "speed": 8.0},
+            {"direction": 50.0, "speed": 10.0},
+            {"direction": 225.0, "speed": 6.0},
+        ]
+        _, b64 = self.visualizer.generate_windrose(mock_winds)
+        assert isinstance(b64, str)
+        assert b64.startswith("data:image/png;base64,")
+        assert len(b64) > 100
+
+    def test_generate_kde(self) -> None:
+        """Verify bivariate KDE particle cloud generation."""
+        coords = [
+            (41.050, 29.020),
+            (41.052, 29.022),
+            (41.051, 29.021),
+            (41.053, 29.023),
+            (41.052, 29.020),
+        ]
+        _, b64 = self.visualizer.generate_kde(coords)
+        assert isinstance(b64, str)
+        assert b64.startswith("data:image/png;base64,")
+        assert len(b64) > 100
+
+    def test_generate_route_profile(self) -> None:
+        """Verify route performance SOG and fuel profile generation."""
+        waypoints = [
+            {"cumulative_distance_km": 0.0, "sog_knots": 5.0, "fuel_proxy": 0.0},
+            {"cumulative_distance_km": 3.0, "sog_knots": 6.5, "fuel_proxy": 4.5},
+            {"cumulative_distance_km": 7.0, "sog_knots": 4.8, "fuel_proxy": 11.2},
+        ]
+        _, b64 = self.visualizer.generate_route_profile(waypoints)
+        assert isinstance(b64, str)
+        assert b64.startswith("data:image/png;base64,")
+        assert len(b64) > 100
+
+    def test_save_figure_png(self) -> None:
+        """Verify saving high-resolution 300-DPI PNG to disk."""
+        from matplotlib.figure import Figure
+        import tempfile
+        fig = Figure()
+        ax = fig.add_subplot(111)
+        ax.plot([1, 2, 3], [4, 5, 6])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = Path(tmpdir) / "test_chart.png"
+            saved_path = self.visualizer.save_figure_png(fig, out_path, dpi=100)
+            assert saved_path.exists()
+            assert saved_path.stat().st_size > 0
+
+    def test_invalid_visualizer_inputs(self) -> None:
+        """Verify visualizer catches invalid input data."""
+        from core.exceptions import InvalidParameterError
+        with pytest.raises(InvalidParameterError) if pytest else self.assertRaises(InvalidParameterError):
+            self.visualizer.generate_heatmap([1.0, 2.0, 3.0])  # type: ignore[arg-type]
+        with pytest.raises(InvalidParameterError) if pytest else self.assertRaises(InvalidParameterError):
+            self.visualizer.generate_kde([(41.0, 29.0)])  # < 3 coords
+        with pytest.raises(InvalidParameterError) if pytest else self.assertRaises(InvalidParameterError):
+            self.visualizer.generate_distance_kde([1.0, 2.0])  # < 3 distances
+        with pytest.raises(InvalidParameterError) if pytest else self.assertRaises(InvalidParameterError):
+            self.visualizer.generate_route_profile([])
+
+    def test_generate_distance_kde(self) -> None:
+        """Verify 1D drift distance distribution KDE generation."""
+        distances = [1.2, 2.5, 3.1, 4.0, 2.8, 3.5, 1.9]
+        _, b64 = self.visualizer.generate_distance_kde(distances)
+        assert isinstance(b64, str)
+        assert b64.startswith("data:image/png;base64,")
+        assert len(b64) > 100
+
+
 
 
 
