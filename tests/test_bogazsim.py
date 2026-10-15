@@ -26,6 +26,7 @@ from core.constants import (
     COLOR_BG_DARK,
     COLOR_ROUTE,
     CONSTRICTION_LAT,
+    CONSTRICTION_LON,
     CURRENT_HEAD_PENALTY_FACTOR,
     DEFAULT_DT_SECONDS,
     DEFAULT_VESSEL_SPEED_KNOTS,
@@ -1495,7 +1496,514 @@ class TestMaritimeVisualizer(unittest.TestCase):
         assert len(b64) > 100
 
 
+try:
+    from fastapi.testclient import TestClient as _FastAPITestClient
+    import httpx  # noqa: F401
+    TestClient = _FastAPITestClient
+except (ImportError, RuntimeError):
+    import asyncio
+    import json
+    from urllib.parse import urlparse
+
+    class _CaseInsensitiveDict(dict):
+        def __getitem__(self, key: str) -> Any:
+            return super().__getitem__(key.lower())
+
+        def __contains__(self, key: object) -> bool:
+            return super().__contains__(str(key).lower())
+
+        def get(self, key: str, default: Any = None) -> Any:
+            return super().get(key.lower(), default)
+
+    class _ASGIResponse:
+        def __init__(self, status_code: int, headers: dict[str, str], content: bytes) -> None:
+            self.status_code: int = status_code
+            self.headers: dict[str, str] = _CaseInsensitiveDict({k.lower(): v for k, v in headers.items()})
+            self.content: bytes = content
+            self.text: str = content.decode("utf-8", errors="replace")
+
+        def json(self) -> Any:
+            return json.loads(self.text)
+
+    class _ASGITestClient:
+        """In-memory ASGI test client replicating FastAPI TestClient."""
+
+        def __init__(self, target_app: Any) -> None:
+            self.app = target_app
+
+        def request(
+            self,
+            method: str,
+            url: str,
+            *,
+            json_data: Any = None,
+            data: Any = None,
+            headers: dict[str, str] | None = None,
+        ) -> _ASGIResponse:
+            parsed = urlparse(url)
+            path = parsed.path or "/"
+            query = parsed.query or ""
+            req_headers = dict(headers or {})
+            if json_data is not None:
+                body_bytes = json.dumps(json_data).encode("utf-8")
+                req_headers.setdefault("content-type", "application/json")
+            elif data is not None:
+                body_bytes = data if isinstance(data, bytes) else str(data).encode("utf-8")
+            else:
+                body_bytes = b""
+            raw_headers = [(k.lower().encode("latin-1"), v.encode("latin-1")) for k, v in req_headers.items()]
+            status_code = 200
+            resp_headers: dict[str, str] = {}
+            body_chunks: list[bytes] = []
+
+            async def _run() -> None:
+                nonlocal status_code, resp_headers
+                sent = False
+
+                async def receive() -> dict[str, Any]:
+                    nonlocal sent
+                    if not sent:
+                        sent = True
+                        return {"type": "http.request", "body": body_bytes, "more_body": False}
+                    return {"type": "http.disconnect"}
+
+                async def send(msg: dict[str, Any]) -> None:
+                    nonlocal status_code, resp_headers
+                    if msg["type"] == "http.response.start":
+                        status_code = msg["status"]
+                        resp_headers = {k.decode("latin-1"): v.decode("latin-1") for k, v in msg.get("headers", [])}
+                    elif msg["type"] == "http.response.body":
+                        body_chunks.append(msg.get("body", b""))
+
+                scope = {
+                    "type": "http",
+                    "asgi": {"version": "3.0"},
+                    "http_version": "1.1",
+                    "method": method.upper(),
+                    "scheme": "http",
+                    "path": path,
+                    "raw_path": path.encode("ascii"),
+                    "query_string": query.encode("ascii"),
+                    "headers": raw_headers,
+                    "client": ("127.0.0.1", 50000),
+                    "server": ("testserver", 80),
+                    "app": self.app,
+                }
+                await self.app(scope, receive, send)
+
+            asyncio.run(_run())
+            return _ASGIResponse(status_code, resp_headers, b"".join(body_chunks))
+
+        def get(self, url: str, **kwargs: Any) -> _ASGIResponse:
+            return self.request("GET", url, **kwargs)
+
+        def post(self, url: str, json: Any = None, data: Any = None, **kwargs: Any) -> _ASGIResponse:
+            return self.request("POST", url, json_data=json, data=data, **kwargs)
+
+    TestClient = _ASGITestClient
 
 
+class TestFastAPIEndpoints(unittest.TestCase):
+    """Test suite for Phase 6 FastAPI REST endpoints and TestClient integration.
 
+    # RUBRIC: Web Domain
+    # RUBRIC: Custom Exceptions
+    # RUBRIC: Offline Testing
+    Covers happy path plus at least one error path for every single endpoint.
+    Operates 100% offline via mock weather client injection and deterministic seeds.
+    """
 
+    def setUp(self) -> None:
+        """Initialize TestClient and isolate state with mock weather client."""
+        from main import app, set_weather_client, state
+        from core.weather_client import SyntheticWeatherGenerator, WeatherAPIClient
+
+        self.client = TestClient(app)
+        self.state = state
+        self.state.clear()
+
+        # Inject offline mock weather client to avoid external network requests
+        self.offline_weather = WeatherAPIClient(
+            synthetic_generator=SyntheticWeatherGenerator("poyraz")
+        )
+        self.mock_wind_payload = {
+            "speed_ms": 8.5,
+            "direction_deg": 45.0,
+            "u_wind": -6.01,
+            "v_wind": -6.01,
+            "sector_name": "Poyraz",
+            "sector_description": "North-East (NE) — Dominant high-speed prevailing wind",
+            "speed_category": "Fresh Breeze",
+            "surface_pressure_hpa": 1013.25,
+            "source": "synthetic",
+            "timestamp": "2026-10-15T12:00:00Z",
+        }
+        self.offline_weather.get_current_wind = MagicMock(return_value=self.mock_wind_payload)  # type: ignore[method-assign]
+        set_weather_client(self.offline_weather)
+
+    def tearDown(self) -> None:
+        """Clean up state repository and reset injected clients."""
+        from main import set_weather_client, state
+        state.clear()
+        set_weather_client(None)
+
+    # 1. GET /
+    def test_serve_dashboard_happy(self) -> None:
+        """# RUBRIC: Web Domain - Happy Path: GET / serves HTML5 dashboard."""
+        resp = self.client.get("/")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+        assert "BoğazSim" in resp.text
+        assert "Bosphorus" in resp.text
+
+    def test_serve_dashboard_method_not_allowed(self) -> None:
+        """# RUBRIC: Web Domain - Error Path: POST / rejected with 405."""
+        resp = self.client.post("/")
+        assert resp.status_code == 405
+
+    # 2. GET /api/health
+    def test_health_endpoint_happy(self) -> None:
+        """# RUBRIC: Web Domain - Happy Path: GET /api/health returns status, uptime, bounds."""
+        resp = self.client.get("/api/health")
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["status"] == "healthy"
+        assert payload["uptime_seconds"] >= 0.0
+        assert payload["grid_dimensions"]["rows"] == GRID_ROWS
+        assert payload["grid_dimensions"]["cols"] == GRID_COLS
+        assert payload["geographic_bounds"]["lat_min"] == LAT_MIN
+        assert "memory_rss_mb" in payload
+
+    def test_health_endpoint_method_not_allowed(self) -> None:
+        """# RUBRIC: Web Domain - Error Path: POST /api/health rejected with 405."""
+        resp = self.client.post("/api/health")
+        assert resp.status_code == 405
+
+    # 3. GET /api/weather
+    def test_weather_endpoint_happy(self) -> None:
+        """# RUBRIC: Automation - Happy Path: GET /api/weather returns wind and source."""
+        resp = self.client.get("/api/weather")
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["speed_ms"] == 8.5
+        assert payload["direction_deg"] == 45.0
+        assert payload["sector_name"] == "Poyraz"
+        assert payload["source"] == "synthetic"
+
+    def test_weather_endpoint_service_error(self) -> None:
+        """# RUBRIC: Custom Exceptions - Error Path: WeatherAPIError mapped to HTTP 502."""
+        from core.exceptions import WeatherAPIError
+        self.offline_weather.get_current_wind = MagicMock(  # type: ignore[method-assign]
+            side_effect=WeatherAPIError("Remote weather service unavailable")
+        )
+        resp = self.client.get("/api/weather")
+        assert resp.status_code == 502
+        payload = resp.json()
+        assert payload["error"] == "WeatherAPIError"
+        assert "Remote weather service unavailable" in payload["detail"]
+
+    # 4. GET /api/grid
+    def test_grid_endpoint_happy(self) -> None:
+        """# RUBRIC: Web Domain - Happy Path: GET /api/grid returns dimensions and vector field."""
+        resp = self.client.get("/api/grid")
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["rows"] == GRID_ROWS
+        assert payload["cols"] == GRID_COLS
+        assert payload["lat_min"] == LAT_MIN
+        assert payload["constriction"]["lat"] == CONSTRICTION_LAT
+        assert len(payload["downsampled_vectors"]) > 0
+        first_vec = payload["downsampled_vectors"][0]
+        assert "lat" in first_vec
+        assert "lon" in first_vec
+        assert "is_land" in first_vec
+
+    def test_grid_endpoint_method_not_allowed(self) -> None:
+        """# RUBRIC: Web Domain - Error Path: POST /api/grid rejected with 405."""
+        resp = self.client.post("/api/grid")
+        assert resp.status_code == 405
+
+    # 5. POST /api/simulate/forward
+    def test_forward_simulation_happy(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms - Happy Path: Forward Monte Carlo swarm simulation."""
+        payload = {
+            "entity_type": "person",
+            "lat": CONSTRICTION_LAT,
+            "lon": CONSTRICTION_LON,
+            "particles": 5,
+            "hours": 0.5,
+            "dt": 10.0,
+            "integrator": "rk2",
+        }
+        resp = self.client.post("/api/simulate/forward", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["particle_count"] == 5
+        assert len(data["trajectories"]) == 5
+        assert "landing_heatmap" in data
+        assert "beached_count" in data
+
+    def test_forward_simulation_land_collision_error(self) -> None:
+        """# RUBRIC: Custom Exceptions - Error Path: Incident origin on dry land returns 422."""
+        payload = {
+            "entity_type": "person",
+            "lat": 41.15,
+            "lon": 28.95,  # Terrestrial coordinates
+            "particles": 5,
+            "hours": 1.0,
+        }
+        resp = self.client.post("/api/simulate/forward", json=payload)
+        assert resp.status_code == 422
+        assert resp.json()["error"] == "LandCollisionError"
+
+    def test_forward_simulation_grid_bounds_error(self) -> None:
+        """# RUBRIC: Custom Exceptions - Error Path: Coordinates outside domain return 400."""
+        payload = {
+            "entity_type": "person",
+            "lat": 45.0,  # Far North outside Bosphorus
+            "lon": 29.05,
+            "particles": 5,
+        }
+        resp = self.client.post("/api/simulate/forward", json=payload)
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "GridBoundsError"
+
+    def test_forward_simulation_validation_error(self) -> None:
+        """# RUBRIC: Web Domain - Error Path: Pydantic bound violation (> 500 particles) returns 422."""
+        payload = {
+            "entity_type": "person",
+            "lat": CONSTRICTION_LAT,
+            "lon": CONSTRICTION_LON,
+            "particles": 9999,  # Capped at 500
+        }
+        resp = self.client.post("/api/simulate/forward", json=payload)
+        assert resp.status_code == 422
+
+    # 6. POST /api/simulate/reverse
+    def test_reverse_simulation_happy(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms - Happy Path: Reverse time-stepping origin locator."""
+        payload = {
+            "entity_type": "raft",
+            "last_lat": 41.050,
+            "last_lon": 29.062,
+            "particles": 5,
+            "hours_back": 0.5,
+            "dt": 10.0,
+            "integrator": "rk2",
+        }
+        resp = self.client.post("/api/simulate/reverse", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "mean_origin" in data
+        assert "confidence_ellipse_95_km" in data
+        assert len(data["estimated_origins"]) == 5
+
+    def test_reverse_simulation_bounds_error(self) -> None:
+        """# RUBRIC: Custom Exceptions - Error Path: Datum outside domain returns 400."""
+        payload = {
+            "entity_type": "raft",
+            "last_lat": 38.0,  # Aegean / outside Bosphorus
+            "last_lon": 29.030,
+            "particles": 5,
+        }
+        resp = self.client.post("/api/simulate/reverse", json=payload)
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "GridBoundsError"
+
+    def test_reverse_simulation_validation_error(self) -> None:
+        """# RUBRIC: Web Domain - Error Path: Hours back exceeding 24h returns 422."""
+        payload = {
+            "entity_type": "raft",
+            "last_lat": 41.050,
+            "last_lon": 29.062,
+            "hours_back": 48.0,  # Capped at 24.0
+        }
+        resp = self.client.post("/api/simulate/reverse", json=payload)
+        assert resp.status_code == 422
+
+    # 7. POST /api/route
+    def test_route_planning_happy(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms - Happy Path: Weighted A* optimal passage planner."""
+        payload = {
+            "start_lat": 41.010,
+            "start_lon": 29.0265,
+            "end_lat": 41.040,
+            "end_lon": 29.0539,
+            "vessel_speed_knots": 12.0,
+            "head_current_penalty": 1.5,
+        }
+        resp = self.client.post("/api/route", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_distance_km"] > 0.0
+        assert data["eta_minutes"] > 0.0
+        assert "waypoints" in data
+        assert len(data["waypoints"]) > 1
+
+    def test_route_planning_land_collision_error(self) -> None:
+        """# RUBRIC: Custom Exceptions - Error Path: Departure or goal on land returns 422."""
+        payload = {
+            "start_lat": 41.15,
+            "start_lon": 28.95,  # Terrestrial location
+            "end_lat": 41.040,
+            "end_lon": 29.000,
+        }
+        resp = self.client.post("/api/route", json=payload)
+        assert resp.status_code == 422
+        assert resp.json()["error"] == "LandCollisionError"
+
+    def test_route_planning_bounds_error(self) -> None:
+        """# RUBRIC: Custom Exceptions - Error Path: Departure outside domain returns 400."""
+        payload = {
+            "start_lat": 45.0,  # Out of bounds
+            "start_lon": 29.00,
+            "end_lat": 41.040,
+            "end_lon": 29.000,
+        }
+        resp = self.client.post("/api/route", json=payload)
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "GridBoundsError"
+
+    # 8. GET /api/analytics/summary
+    def test_analytics_summary_empty_404(self) -> None:
+        """# RUBRIC: Web Domain - Error Path: GET /api/analytics/summary returns 404 on empty state."""
+        resp = self.client.get("/api/analytics/summary")
+        assert resp.status_code == 404
+        assert "No simulation has been performed yet" in resp.json()["detail"]
+
+    def test_analytics_summary_happy(self) -> None:
+        """# RUBRIC: Data Analysis Domain - Happy Path: GET /api/analytics/summary consolidates metrics."""
+        # Run a forward simulation to populate state
+        sim_payload = {
+            "entity_type": "person",
+            "lat": CONSTRICTION_LAT,
+            "lon": CONSTRICTION_LON,
+            "particles": 5,
+            "hours": 0.5,
+        }
+        self.client.post("/api/simulate/forward", json=sim_payload)
+
+        resp = self.client.get("/api/analytics/summary")
+        assert resp.status_code == 200
+        summary = resp.json()
+        assert summary["simulation_type"] == "forward_swarm"
+        assert summary["particle_count"] == 5
+
+    # 9. GET /api/analytics/chart/{name}
+    def test_analytics_chart_whitelist_error(self) -> None:
+        """# RUBRIC: Web Domain - Error Path: Unwhitelisted chart name returns 400."""
+        resp = self.client.get("/api/analytics/chart/invalid_pie_chart")
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "InvalidParameterError"
+
+    def test_analytics_chart_quiver_happy(self) -> None:
+        """# RUBRIC: Dark-Themed Matplotlib/Seaborn Engine - Happy Path: Quiver vector field chart."""
+        resp = self.client.get("/api/analytics/chart/quiver")
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["chart_name"] == "quiver"
+        assert payload["image_base64"].startswith("data:image/png;base64,")
+
+    def test_analytics_chart_windrose_happy(self) -> None:
+        """# RUBRIC: Dark-Themed Matplotlib/Seaborn Engine - Happy Path: Polar wind rose chart."""
+        resp = self.client.get("/api/analytics/chart/windrose")
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["chart_name"] == "windrose"
+        assert payload["image_base64"].startswith("data:image/png;base64,")
+
+    def test_analytics_chart_heatmap_empty_404(self) -> None:
+        """# RUBRIC: Web Domain - Error Path: Heatmap requested before swarm simulation returns 404."""
+        resp = self.client.get("/api/analytics/chart/heatmap")
+        assert resp.status_code == 404
+        assert "No forward simulation data available" in resp.json()["detail"]
+
+    def test_analytics_chart_heatmap_happy(self) -> None:
+        """# RUBRIC: Dark-Themed Matplotlib/Seaborn Engine - Happy Path: Heatmap chart with data."""
+        sim_payload = {
+            "entity_type": "person",
+            "lat": CONSTRICTION_LAT,
+            "lon": CONSTRICTION_LON,
+            "particles": 5,
+            "hours": 0.5,
+        }
+        self.client.post("/api/simulate/forward", json=sim_payload)
+
+        resp = self.client.get("/api/analytics/chart/heatmap")
+        assert resp.status_code == 200
+        assert resp.json()["chart_name"] == "heatmap"
+
+    def test_analytics_chart_kde_happy(self) -> None:
+        """# RUBRIC: Dark-Themed Matplotlib/Seaborn Engine - Happy Path: Bivariate spatial KDE chart."""
+        sim_payload = {
+            "entity_type": "person",
+            "lat": CONSTRICTION_LAT,
+            "lon": CONSTRICTION_LON,
+            "particles": 5,
+            "hours": 0.5,
+        }
+        self.client.post("/api/simulate/forward", json=sim_payload)
+
+        resp = self.client.get("/api/analytics/chart/kde")
+        assert resp.status_code == 200
+        assert resp.json()["chart_name"] == "kde"
+
+    def test_analytics_chart_distance_kde_happy(self) -> None:
+        """# RUBRIC: Dark-Themed Matplotlib/Seaborn Engine - Happy Path: 1D drift distance KDE chart."""
+        sim_payload = {
+            "entity_type": "person",
+            "lat": CONSTRICTION_LAT,
+            "lon": CONSTRICTION_LON,
+            "particles": 5,
+            "hours": 0.5,
+        }
+        self.client.post("/api/simulate/forward", json=sim_payload)
+
+        resp = self.client.get("/api/analytics/chart/distance_kde")
+        assert resp.status_code == 200
+        assert resp.json()["chart_name"] == "distance_kde"
+
+    def test_analytics_chart_route_empty_404(self) -> None:
+        """# RUBRIC: Web Domain - Error Path: Route profile requested without route returns 404."""
+        resp = self.client.get("/api/analytics/chart/route")
+        assert resp.status_code == 404
+        assert "No route navigation data available" in resp.json()["detail"]
+
+    def test_analytics_chart_route_happy(self) -> None:
+        """# RUBRIC: Dark-Themed Matplotlib/Seaborn Engine - Happy Path: Route performance profile."""
+        route_payload = {
+            "start_lat": 41.010,
+            "start_lon": 29.0265,
+            "end_lat": 41.040,
+            "end_lon": 29.0539,
+            "vessel_speed_knots": 12.0,
+        }
+        self.client.post("/api/route", json=route_payload)
+
+        resp = self.client.get("/api/analytics/chart/route")
+        assert resp.status_code == 200
+        assert resp.json()["chart_name"] == "route"
+
+    # 10. GET /api/export/csv
+    def test_export_csv_empty_404(self) -> None:
+        """# RUBRIC: Web Domain - Error Path: GET /api/export/csv returns 404 on empty state."""
+        resp = self.client.get("/api/export/csv")
+        assert resp.status_code == 404
+        assert "No simulation has been performed yet" in resp.json()["detail"]
+
+    def test_export_csv_happy(self) -> None:
+        """# RUBRIC: Data Analysis Domain - Happy Path: GET /api/export/csv exports trajectory CSV."""
+        sim_payload = {
+            "entity_type": "person",
+            "lat": CONSTRICTION_LAT,
+            "lon": CONSTRICTION_LON,
+            "particles": 5,
+            "hours": 0.5,
+        }
+        self.client.post("/api/simulate/forward", json=sim_payload)
+
+        resp = self.client.get("/api/export/csv")
+        assert resp.status_code == 200
+        assert "text/csv" in resp.headers["content-type"]
+        assert 'attachment; filename="bogazsim_export.csv"' in resp.headers["content-disposition"]
+        assert "particle_id,step,time_seconds" in resp.text

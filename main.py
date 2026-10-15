@@ -16,7 +16,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,8 +25,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from analytics.data_processor import SimulationDataProcessor
-from analytics.visualizer import MaritimeVisualizer
 from core.constants import (
     CONSTRICTION_LAT,
     CONSTRICTION_LON,
@@ -42,16 +40,12 @@ from core.constants import (
     LON_MAX,
     LON_MIN,
     MAX_DT_SECONDS,
-    MAX_HORIZON_HOURS,
-    MAX_PARTICLE_COUNT,
+    MAX_SIMULATION_HOURS,
     MAX_SWARM_PARTICLES,
-    MAX_TIME_STEP_SECONDS,
     MAX_VESSEL_SPEED_KNOTS,
     MIN_DT_SECONDS,
-    MIN_HORIZON_HOURS,
-    MIN_PARTICLE_COUNT,
+    MIN_SIMULATION_HOURS,
     MIN_SWARM_PARTICLES,
-    MIN_TIME_STEP_SECONDS,
     MIN_VESSEL_SPEED_KNOTS,
     ROUTING_FUEL_PENALTY_FACTOR,
 )
@@ -64,10 +58,12 @@ from core.exceptions import (
     SimulationError,
     WeatherAPIError,
 )
-from core.grid_engine import VectorGrid
-from core.route_optimizer import WeightedAStarRouter
-from core.simulator import ForwardSwarmSimulator, ReverseTracker
-from core.weather_client import WeatherAPIClient
+
+if TYPE_CHECKING:
+    from analytics.data_processor import SimulationDataProcessor
+    from analytics.visualizer import MaritimeVisualizer
+    from core.grid_engine import VectorGrid
+    from core.weather_client import WeatherAPIClient
 
 # ---------------------------------------------------------------------------
 # Application Initialization & Singletons
@@ -151,12 +147,85 @@ class SimulationStateManager:
             self.latest_any = None
 
 
-# Shared engine singletons
-grid = VectorGrid()
-weather_client = WeatherAPIClient()
-data_processor = SimulationDataProcessor()
-visualizer = MaritimeVisualizer()
+# State singleton (lightweight thread-safe container)
 state = SimulationStateManager()
+
+# ---------------------------------------------------------------------------
+# Lazily Created Shared Singletons
+# ---------------------------------------------------------------------------
+_grid_singleton: VectorGrid | None = None
+_weather_client_singleton: WeatherAPIClient | None = None
+_data_processor_singleton: SimulationDataProcessor | None = None
+_visualizer_singleton: MaritimeVisualizer | None = None
+_downsampled_vectors_cache: list[dict[str, Any]] | None = None
+
+
+def get_grid() -> VectorGrid:
+    """Retrieve or lazily initialize the shared VectorGrid singleton."""
+    global _grid_singleton
+    if _grid_singleton is None:
+        from core.grid_engine import VectorGrid
+        _grid_singleton = VectorGrid()
+    return _grid_singleton
+
+
+def get_weather_client() -> WeatherAPIClient:
+    """Retrieve or lazily initialize the shared WeatherAPIClient singleton."""
+    global _weather_client_singleton
+    if _weather_client_singleton is None:
+        from core.weather_client import WeatherAPIClient
+        _weather_client_singleton = WeatherAPIClient()
+    return _weather_client_singleton
+
+
+def set_weather_client(client: WeatherAPIClient | None) -> None:
+    """Inject a custom or mock WeatherAPIClient instance (for offline testing)."""
+    global _weather_client_singleton
+    _weather_client_singleton = client
+
+
+def get_data_processor() -> SimulationDataProcessor:
+    """Retrieve or lazily initialize the shared SimulationDataProcessor singleton."""
+    global _data_processor_singleton
+    if _data_processor_singleton is None:
+        from analytics.data_processor import SimulationDataProcessor
+        _data_processor_singleton = SimulationDataProcessor()
+    return _data_processor_singleton
+
+
+def get_visualizer() -> MaritimeVisualizer:
+    """Retrieve or lazily initialize the shared MaritimeVisualizer singleton."""
+    global _visualizer_singleton
+    if _visualizer_singleton is None:
+        from analytics.visualizer import MaritimeVisualizer
+        _visualizer_singleton = MaritimeVisualizer()
+    return _visualizer_singleton
+
+
+def get_downsampled_vectors(stride: int = 4) -> list[dict[str, Any]]:
+    """Retrieve or lazily build downsampled surface current vectors for Canvas."""
+    global _downsampled_vectors_cache
+    if _downsampled_vectors_cache is None:
+        grid = get_grid()
+        vectors: list[dict[str, Any]] = []
+        for r in range(0, GRID_ROWS, stride):
+            for c in range(0, GRID_COLS, stride):
+                cell = grid[r, c]
+                lat, lon = grid.indices_to_lat_lon(float(r), float(c))
+                is_land = cell.is_land
+                u = 0.0 if is_land else cell.u
+                v = 0.0 if is_land else cell.v
+                spd = 0.0 if is_land else math.hypot(u, v)
+                vectors.append({
+                    "lat": round(lat, 5),
+                    "lon": round(lon, 5),
+                    "u": round(u, 2),
+                    "v": round(v, 2),
+                    "speed": round(spd, 2),
+                    "is_land": is_land,
+                })
+        _downsampled_vectors_cache = vectors
+    return _downsampled_vectors_cache
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +252,7 @@ def route_not_found_handler(request: Request, exc: RouteNotFoundError) -> JSONRe
 
 @app.exception_handler(GridBoundsError)
 def grid_bounds_handler(request: Request, exc: GridBoundsError) -> JSONResponse:
-    """Handle geographic coordinates falling outside the Bosphorus bounding box."""
+    """Handle geographic coordinates falling outside the Bosphorus domain."""
     return JSONResponse(
         status_code=400,
         content={"error": "GridBoundsError", "detail": str(exc)},
@@ -267,7 +336,11 @@ class RouteRequest(BaseModel):
 def _validate_bounds(lat: float, lon: float) -> None:
     """Check whether coordinate falls strictly inside the Bosphorus domain."""
     if not (LAT_MIN <= lat <= LAT_MAX and LON_MIN <= lon <= LON_MAX):
-        raise GridBoundsError(lat, lon, LAT_MIN, LAT_MAX, LON_MIN, LON_MAX)
+        raise GridBoundsError(
+            lat,
+            lon,
+            f"Coordinates ({lat:.4f}°N, {lon:.4f}°E) exceed bounds [{LAT_MIN}, {LAT_MAX}] x [{LON_MIN}, {LON_MAX}]",
+        )
 
 
 def _resolve_integrator(name: str) -> Integrator:
@@ -285,7 +358,8 @@ def _resolve_wind_vector(speed_override: float | None, dir_override: float | Non
     if speed_override is not None and dir_override is not None:
         rad = math.radians(dir_override)
         return -speed_override * math.sin(rad), -speed_override * math.cos(rad)
-    w = weather_client.get_current_wind()
+    client = get_weather_client()
+    w = client.get_current_wind()
     return float(w["u_wind"]), float(w["v_wind"])
 
 
@@ -295,30 +369,82 @@ def _get_memory_mb() -> float:
     return round(rss / (1024.0 * 1024.0), 2) if sys.platform == "darwin" else round(rss / 1024.0, 2)
 
 
-# Precompute downsampled vector field once at module load
-def _build_downsampled_vectors(stride: int = 4) -> list[dict[str, Any]]:
-    """Generate downsampled surface current vector field for Canvas rendering."""
-    vectors: list[dict[str, Any]] = []
-    for r in range(0, GRID_ROWS, stride):
-        for c in range(0, GRID_COLS, stride):
-            cell = grid[r, c]
-            lat, lon = grid.indices_to_lat_lon(float(r), float(c))
-            is_land = cell.is_land
-            u = 0.0 if is_land else cell.u
-            v = 0.0 if is_land else cell.v
-            spd = 0.0 if is_land else math.hypot(u, v)
-            vectors.append({
-                "lat": round(lat, 5),
-                "lon": round(lon, 5),
-                "u": round(u, 2),
-                "v": round(v, 2),
-                "speed": round(spd, 2),
-                "is_land": is_land,
-            })
-    return vectors
+# ---------------------------------------------------------------------------
+# Chart Renderer Helpers (Concise & Modular)
+# ---------------------------------------------------------------------------
+def _render_quiver() -> str:
+    """Generate quiver vector field Base64 chart."""
+    vis = get_visualizer()
+    grid = get_grid()
+    _, b64 = vis.generate_quiver(grid=grid, subsample=5)
+    return b64
 
 
-DOWNSAMPLED_VECTORS = _build_downsampled_vectors(stride=4)
+def _render_windrose() -> str:
+    """Generate polar wind rose Base64 chart."""
+    vis = get_visualizer()
+    _, b64 = vis.generate_windrose()
+    return b64
+
+
+def _render_heatmap() -> str:
+    """Generate landing probability heatmap Base64 chart."""
+    if state.latest_forward is None:
+        raise HTTPException(status_code=404, detail="No forward simulation data available to generate heatmap.")
+    vis = get_visualizer()
+    _, b64 = vis.generate_heatmap(state.latest_forward["landing_heatmap"])
+    return b64
+
+
+def _render_kde() -> str:
+    """Generate bivariate spatial KDE Base64 chart."""
+    coords: list[tuple[float, float]] = []
+    if state.latest_forward is not None:
+        coords = [(p[0], p[1]) for p in state.latest_forward.get("final_positions", [])]
+    elif state.latest_reverse is not None:
+        coords = state.latest_reverse.get("estimated_origins", [])
+    if len(coords) < 3:
+        raise HTTPException(
+            status_code=404,
+            detail="At least 3 simulation particles required to generate spatial KDE. Run a swarm first.",
+        )
+    vis = get_visualizer()
+    _, b64 = vis.generate_kde(coords)
+    return b64
+
+
+def _render_distance_kde() -> str:
+    """Generate 1D drift distance KDE Base64 chart."""
+    sim = state.latest_forward or state.latest_reverse
+    if sim is None or "trajectories" not in sim:
+        raise HTTPException(status_code=404, detail="No swarm simulation data available to generate drift distance KDE.")
+    dt = sim.get("time_step_seconds", DEFAULT_DT_SECONDS)
+    dp = get_data_processor()
+    df = dp.swarm_to_dataframe(
+        sim["trajectories"],
+        dt=dt,
+        final_positions=sim.get("final_positions"),
+    )
+    df_rolled = dp.compute_rolling_statistics(df)
+    summary = dp.summarize_by_particle(df_rolled)
+    distances = summary["total_distance_km"].dropna().tolist()
+    if len(distances) < 3:
+        raise HTTPException(status_code=404, detail="At least 3 drift distance samples required to generate distance KDE.")
+    vis = get_visualizer()
+    _, b64 = vis.generate_distance_kde(distances)
+    return b64
+
+
+def _render_route_profile() -> str:
+    """Generate route SOG and fuel profile Base64 chart."""
+    if state.latest_route is None:
+        raise HTTPException(status_code=404, detail="No route navigation data available to generate route profile.")
+    waypoints = state.latest_route.get("waypoint_details", [])
+    if not waypoints:
+        raise HTTPException(status_code=404, detail="Route waypoints are empty.")
+    vis = get_visualizer()
+    _, b64 = vis.generate_route_profile(waypoints)
+    return b64
 
 
 # ---------------------------------------------------------------------------
@@ -350,11 +476,12 @@ def get_health() -> dict[str, Any]:
 @app.get("/api/weather")
 def get_weather() -> dict[str, Any]:
     """Retrieve current Bosphorus wind observations or synthetic regime."""
-    return weather_client.get_current_wind()
+    client = get_weather_client()
+    return client.get_current_wind()
 
 
 @app.get("/api/grid")
-def get_grid() -> dict[str, Any]:
+def get_grid_metadata() -> dict[str, Any]:
     """Retrieve grid metadata and downsampled surface current vectors for Canvas."""
     return {
         "lat_min": LAT_MIN,
@@ -364,7 +491,7 @@ def get_grid() -> dict[str, Any]:
         "rows": GRID_ROWS,
         "cols": GRID_COLS,
         "constriction": {"lat": CONSTRICTION_LAT, "lon": CONSTRICTION_LON},
-        "downsampled_vectors": DOWNSAMPLED_VECTORS,
+        "downsampled_vectors": get_downsampled_vectors(stride=4),
     }
 
 
@@ -375,6 +502,7 @@ def simulate_forward(req: ForwardSimulationRequest) -> dict[str, Any]:
     Physics Note: Plain `def` ensures CPU-bound particle stepping runs on
     worker threads without blocking the FastAPI event loop.
     """
+    grid = get_grid()
     _validate_bounds(req.lat, req.lon)
     if grid.is_land(req.lat, req.lon):
         raise LandCollisionError(req.lat, req.lon)
@@ -386,6 +514,7 @@ def simulate_forward(req: ForwardSimulationRequest) -> dict[str, Any]:
     integrator = _resolve_integrator(req.integrator)
     wind_vec = _resolve_wind_vector(req.wind_speed, req.wind_direction)
 
+    from core.simulator import ForwardSwarmSimulator
     sim = ForwardSwarmSimulator(grid=grid, integrator=integrator)
     result = sim.run(
         entity_type=etype,
@@ -418,8 +547,10 @@ def simulate_reverse(req: ReverseSimulationRequest) -> dict[str, Any]:
     integrator = _resolve_integrator(req.integrator)
     wind_vec = _resolve_wind_vector(req.wind_speed, req.wind_direction)
 
+    grid = get_grid()
+    from core.simulator import ReverseTracker
     tracker = ReverseTracker(grid=grid, integrator=integrator)
-    result = tracker.run(
+    result = tracker.backtrack(
         entity_type=etype,
         datum_lat=req.last_lat,
         datum_lon=req.last_lon,
@@ -442,17 +573,24 @@ def plan_route(req: RouteRequest) -> dict[str, Any]:
     _validate_bounds(req.start_lat, req.start_lon)
     _validate_bounds(req.end_lat, req.end_lon)
 
+    grid = get_grid()
     if grid.is_land(req.start_lat, req.start_lon):
         raise LandCollisionError(req.start_lat, req.start_lon)
     if grid.is_land(req.end_lat, req.end_lon):
         raise LandCollisionError(req.end_lat, req.end_lon)
 
+    from core.route_optimizer import WeightedAStarRouter
     router = WeightedAStarRouter(
         grid=grid,
-        vessel_speed_knots=req.vessel_speed_knots,
-        head_current_penalty=req.head_current_penalty,
+        fuel_penalty_weight=req.head_current_penalty,
     )
-    route = router.find_optimal_route(req.start_lat, req.start_lon, req.end_lat, req.end_lon)
+    route = router.find_route(
+        start_lat=req.start_lat,
+        start_lon=req.start_lon,
+        goal_lat=req.end_lat,
+        goal_lon=req.end_lon,
+        vessel_speed_knots=req.vessel_speed_knots,
+    )
     result = route.to_dict()
     state.store_route(result)
     return result
@@ -466,73 +604,8 @@ def get_analytics_summary() -> dict[str, Any]:
             status_code=404,
             detail="No simulation has been performed yet. Run a forward swarm, reverse track, or route first.",
         )
-    return data_processor.generate_summary_metrics(state.latest_any)
-
-
-def _render_quiver() -> str:
-    """Generate quiver vector field Base64 chart."""
-    _, b64 = visualizer.generate_quiver(grid=grid, subsample=5)
-    return b64
-
-
-def _render_windrose() -> str:
-    """Generate polar wind rose Base64 chart."""
-    _, b64 = visualizer.generate_windrose()
-    return b64
-
-
-def _render_heatmap() -> str:
-    """Generate landing probability heatmap Base64 chart."""
-    if state.latest_forward is None:
-        raise HTTPException(status_code=404, detail="No forward simulation data available to generate heatmap.")
-    _, b64 = visualizer.generate_heatmap(state.latest_forward["landing_heatmap"])
-    return b64
-
-
-def _render_kde() -> str:
-    """Generate bivariate spatial KDE Base64 chart."""
-    coords: list[tuple[float, float]] = []
-    if state.latest_forward is not None:
-        coords = [(p[0], p[1]) for p in state.latest_forward.get("final_positions", [])]
-    elif state.latest_reverse is not None:
-        coords = state.latest_reverse.get("estimated_origins", [])
-    if len(coords) < 3:
-        raise HTTPException(
-            status_code=404,
-            detail="At least 3 simulation particles required to generate spatial KDE. Run a swarm first.",
-        )
-    _, b64 = visualizer.generate_kde(coords)
-    return b64
-
-
-def _render_distance_kde() -> str:
-    """Generate 1D drift distance KDE Base64 chart."""
-    sim = state.latest_forward or state.latest_reverse
-    if sim is None or "trajectories" not in sim:
-        raise HTTPException(status_code=404, detail="No swarm simulation data available to generate drift distance KDE.")
-    dt = sim.get("time_step_seconds", DEFAULT_DT_SECONDS)
-    df = data_processor.swarm_to_dataframe(
-        sim["trajectories"],
-        dt=dt,
-        final_positions=sim.get("final_positions"),
-    )
-    dist_summary = data_processor.compute_drift_distance_summary(df)
-    distances = dist_summary["total_distance_km"].tolist()
-    if len(distances) < 3:
-        raise HTTPException(status_code=404, detail="At least 3 drift distance samples required to generate distance KDE.")
-    _, b64 = visualizer.generate_distance_kde(distances)
-    return b64
-
-
-def _render_route_profile() -> str:
-    """Generate route SOG and fuel profile Base64 chart."""
-    if state.latest_route is None:
-        raise HTTPException(status_code=404, detail="No route navigation data available to generate route profile.")
-    waypoints = state.latest_route.get("waypoint_details", [])
-    if not waypoints:
-        raise HTTPException(status_code=404, detail="Route waypoints are empty.")
-    _, b64 = visualizer.generate_route_profile(waypoints)
-    return b64
+    dp = get_data_processor()
+    return dp.generate_summary_metrics(state.latest_any)
 
 
 @app.get("/api/analytics/chart/{name}")
@@ -567,10 +640,11 @@ def export_csv_data() -> Response:
         )
 
     sim = state.latest_any
+    dp = get_data_processor()
     if "waypoints" in sim and "total_distance_km" in sim:
-        df = data_processor.route_to_dataframe(sim.get("waypoint_details", sim.get("waypoints", [])))
+        df = dp.route_to_dataframe(sim.get("waypoint_details", sim.get("waypoints", [])))
     elif "trajectories" in sim:
-        df = data_processor.swarm_to_dataframe(
+        df = dp.swarm_to_dataframe(
             trajectories=sim["trajectories"],
             dt=sim.get("time_step_seconds", DEFAULT_DT_SECONDS),
             final_positions=sim.get("final_positions"),
@@ -578,7 +652,7 @@ def export_csv_data() -> Response:
     else:
         raise HTTPException(status_code=400, detail="Stored simulation data is unrecognized or malformed.")
 
-    csv_content = data_processor.export_csv(df)
+    csv_content = dp.export_csv(df)
     return Response(
         content=csv_content,
         media_type="text/csv",
