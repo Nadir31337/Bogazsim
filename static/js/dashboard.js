@@ -55,43 +55,37 @@ const state = {
 };
 
 /**
- * District Catalog matching Zoom Earth Layout
+ * Clean Coastal Bosphorus Maritime Stations matching Zoom Earth layout.
+ * Accurately spans the Bosphorus Strait from Black Sea entrance to Marmara Sea.
  */
-const ZOOM_EARTH_DISTRICTS = [
-  // Upper / Black Sea Reach
-  { name: 'Rumelifeneri', lat: 41.235, lon: 29.096, baseSpeedKmh: 23 },
-  { name: 'Poyrazköy', lat: 41.205, lon: 29.130, baseSpeedKmh: 22 },
-  { name: 'Riva', lat: 41.223, lon: 29.218, baseSpeedKmh: 24 },
-  { name: 'Sarıyer', lat: 41.168, lon: 29.055, baseSpeedKmh: 20 },
-  { name: 'Beykoz', lat: 41.135, lon: 29.100, baseSpeedKmh: 17 },
-  { name: 'Paşamandıra', lat: 41.155, lon: 29.200, baseSpeedKmh: 22 },
-  { name: 'Cumhuriyet', lat: 41.140, lon: 29.260, baseSpeedKmh: 18 },
+const BOSPHORUS_STATIONS = [
+  // --- North Entrance / Black Sea ---
+  { name: 'Rumelifeneri', lat: 41.240, lon: 29.098, baseSpeedKmh: 24 },
+  { name: 'Poyrazköy', lat: 41.210, lon: 29.135, baseSpeedKmh: 23 },
+  { name: 'Kilyos', lat: 41.248, lon: 29.030, baseSpeedKmh: 25 },
+  { name: 'Riva', lat: 41.225, lon: 29.225, baseSpeedKmh: 24 },
 
-  // Middle / Narrows
-  { name: 'Arnavutköy', lat: 41.185, lon: 28.740, baseSpeedKmh: 21 },
-  { name: 'Hacımaşlı', lat: 41.160, lon: 28.720, baseSpeedKmh: 20 },
-  { name: 'Sultangazi', lat: 41.105, lon: 28.870, baseSpeedKmh: 18 },
-  { name: 'Kağıthane', lat: 41.080, lon: 28.970, baseSpeedKmh: 16 },
-  { name: 'Beşiktaş', lat: 41.043, lon: 29.005, baseSpeedKmh: 14 },
-  { name: 'Üsküdar / Istanbul', lat: 41.025, lon: 29.015, baseSpeedKmh: 15 },
-  { name: 'Ümraniye', lat: 41.025, lon: 29.100, baseSpeedKmh: 13 },
-  { name: 'Çekmeköy', lat: 41.040, lon: 29.180, baseSpeedKmh: 13 },
+  // --- Upper Bosphorus (North of FSM Bridge) ---
+  { name: 'Sarıyer', lat: 41.170, lon: 29.048, baseSpeedKmh: 20 },
+  { name: 'Beykoz', lat: 41.135, lon: 29.110, baseSpeedKmh: 18 },
+  { name: 'Tarabya', lat: 41.140, lon: 29.045, baseSpeedKmh: 19 },
+  { name: 'Paşabahçe', lat: 41.115, lon: 29.102, baseSpeedKmh: 18 },
 
-  // Lower / Marmara Sea
-  { name: 'Ataşehir', lat: 40.985, lon: 29.115, baseSpeedKmh: 14 },
-  { name: 'Sancaktepe', lat: 40.995, lon: 29.225, baseSpeedKmh: 12 },
-  { name: 'Sultanbeyli', lat: 40.960, lon: 29.270, baseSpeedKmh: 13 },
-  { name: 'Maltepe', lat: 40.930, lon: 29.140, baseSpeedKmh: 14 },
-  { name: 'Bakırköy', lat: 40.975, lon: 28.870, baseSpeedKmh: 17 },
-  { name: 'Küçükçekmece', lat: 41.000, lon: 28.770, baseSpeedKmh: 17 },
-  { name: 'Beylikdüzü', lat: 40.990, lon: 28.640, baseSpeedKmh: 19 },
-  { name: 'Esenyurt', lat: 41.035, lon: 28.675, baseSpeedKmh: 18 },
-  { name: 'Bağcılar', lat: 41.035, lon: 28.855, baseSpeedKmh: 16 },
-  { name: 'Gaziosmanpaşa', lat: 41.065, lon: 28.910, baseSpeedKmh: 16 },
+  // --- The Narrows (700m Constriction - Highest Maritime Hazard) ---
+  { name: 'Rumeli Hisarı', lat: 41.085, lon: 29.048, baseSpeedKmh: 18, isNarrows: true },
+  { name: 'Kandilli', lat: 41.076, lon: 29.070, baseSpeedKmh: 17, isNarrows: true },
 
-  // Bosphorus Key Landmarks
-  { name: 'Rumeli Hisarı (700m Constriction)', lat: 41.085, lon: 29.056, baseSpeedKmh: 24, isNarrows: true },
-  { name: 'Kız Kulesi (Maiden\'s Tower)', lat: 41.0211, lon: 29.0041, baseSpeedKmh: 18, isTower: true },
+  // --- Lower Bosphorus (Between Bridges & Historic Peninsula) ---
+  { name: 'Ortaköy', lat: 41.050, lon: 29.020, baseSpeedKmh: 16 },
+  { name: 'Beşiktaş', lat: 41.042, lon: 28.995, baseSpeedKmh: 15 },
+  { name: 'Üsküdar', lat: 41.026, lon: 29.022, baseSpeedKmh: 15 },
+  { name: 'Kız Kulesi', lat: 41.021, lon: 29.004, baseSpeedKmh: 16, isWater: true },
+
+  // --- South Entrance / Marmara Sea ---
+  { name: 'Karaköy', lat: 41.022, lon: 28.974, baseSpeedKmh: 16 },
+  { name: 'Kadıköy', lat: 40.990, lon: 29.030, baseSpeedKmh: 17 },
+  { name: 'Bakırköy', lat: 40.975, lon: 28.875, baseSpeedKmh: 18 },
+  { name: 'Bostancı', lat: 40.955, lon: 29.100, baseSpeedKmh: 17 },
 ];
 
 /**
@@ -131,38 +125,76 @@ const TSS_SOUTHBOUND = [
 ];
 
 /**
- * Initialize Leaflet Map with CartoDB Dark Matter Basemap
+ * Initialize Leaflet Map with High-Performance, Watermark-Free GIS Basemaps
  */
 function initMap() {
   const mapEl = document.getElementById('bosphorus-map');
   if (!mapEl) return;
 
-  // Center on Istanbul Bosphorus
+  // Center on Istanbul Bosphorus with optimal framing
   state.map = L.map('bosphorus-map', {
-    center: [41.115, 29.045],
-    zoom: 11.5,
+    center: [41.115, 29.065],
+    zoom: 11.4,
     minZoom: 10,
     maxZoom: 17,
     zoomControl: true,
     attributionControl: true,
   });
 
-  // CartoDB Dark Matter Tile Layer (Authentic Zoom Earth Dark Basemap)
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a> | BoğazSim',
-    subdomains: 'abcd',
-    maxZoom: 19,
-  }).addTo(state.map);
+  // Basemap Tile Layers (Zero Watermark, 100% Free & Fast CDN)
+  state.baseLayers = {
+    dark: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ | BoğazSim',
+      maxZoom: 16,
+    }),
+    sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics | BoğazSim',
+      maxZoom: 18,
+    }),
+    osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors | BoğazSim',
+      maxZoom: 19,
+    }),
+  };
+
+  // Add default Dark Canvas basemap
+  state.activeBaseLayer = 'dark';
+  state.baseLayers.dark.addTo(state.map);
 
   // Setup Animation Canvas Overlay
   initAnimationCanvas();
 
-  // Populate District Badges
+  // Populate Clean Coastal District Badges
   renderDistrictBadges();
 
   // Render Bridges and TSS Lanes
   renderBridges();
   renderTSSLanes();
+}
+
+/**
+ * Switch Active Basemap Layer (Dark / Satellite / Street)
+ */
+function setBasemap(name) {
+  if (!state.baseLayers || !state.baseLayers[name] || state.activeBaseLayer === name) return;
+  state.map.removeLayer(state.baseLayers[state.activeBaseLayer]);
+  state.baseLayers[name].addTo(state.map);
+
+  // Keep particle canvas overlay on top of basemap
+  if (state.canvas && state.canvas.parentNode) {
+    state.canvas.parentNode.appendChild(state.canvas);
+  }
+  state.activeBaseLayer = name;
+
+  // Update UI pill buttons
+  ['dark', 'sat', 'osm'].forEach((b) => {
+    const el = document.getElementById(`btn-bm-${b}`);
+    if (el) {
+      if (b === name) el.classList.add('active');
+      else el.classList.remove('active');
+    }
+  });
+}
 
   // Map Click Listener to Set Form Coordinates
   state.map.on('click', (e) => {
@@ -243,7 +275,7 @@ function initAnimationCanvas() {
 }
 
 /**
- * Zoom Earth District Wind Badges (DivIcon)
+ * Minimalist Zoom Earth Station Badges (DivIcon)
  */
 function renderDistrictBadges() {
   // Clear old markers
@@ -252,46 +284,43 @@ function renderDistrictBadges() {
 
   if (!state.layers.districts) return;
 
-  const windDir = state.weather.direction_deg;
+  const windDir = state.weather.direction_deg || 0;
 
-  ZOOM_EARTH_DISTRICTS.forEach((d) => {
-    let speedVal = Math.round(d.baseSpeedKmh * (state.weather.speed_kmh / 29.0));
+  BOSPHORUS_STATIONS.forEach((d) => {
+    let speedVal = Math.round(d.baseSpeedKmh * ((state.weather.speed_kmh || 29.0) / 29.0));
     if (isNaN(speedVal) || speedVal <= 0) speedVal = d.baseSpeedKmh;
 
-    let iconHtml;
-    if (d.isNarrows) {
-      iconHtml = `
-        <div class="zoom-narrows-badge">
-          <span>♜ ${d.name}</span>
+    const isNarrows = !!d.isNarrows;
+
+    const iconHtml = `
+      <div class="ze-station ${isNarrows ? 'ze-narrows' : ''}">
+        <div class="ze-name">${isNarrows ? '⚠️ ' : ''}${d.name}</div>
+        <div class="ze-pill">
+          <span class="ze-val">${speedVal}</span>
+          <span class="ze-arr" style="transform: rotate(${windDir}deg);">↓</span>
         </div>
-      `;
-    } else {
-      iconHtml = `
-        <div class="zoom-district-badge">
-          <span class="zoom-district-name">${d.name}</span>
-          <span class="zoom-wind-pill">
-            <span>${speedVal}</span>
-            <span class="zoom-wind-arrow" style="transform: rotate(${windDir}deg);">↓</span>
-          </span>
-        </div>
-      `;
-    }
+      </div>
+    `;
 
     const icon = L.divIcon({
       html: iconHtml,
-      className: 'custom-zoom-marker',
-      iconSize: null,
-      iconAnchor: [35, 12],
+      className: 'ze-div-icon',
+      iconSize: [80, 36],
+      iconAnchor: [40, 18],
     });
 
     const marker = L.marker([d.lat, d.lon], { icon }).addTo(state.map);
     marker.on('click', () => {
       if (state.activeTab === 'forward') {
-        document.getElementById('fwd-lat').value = d.lat.toFixed(4);
-        document.getElementById('fwd-lon').value = d.lon.toFixed(4);
+        const latEl = document.getElementById('fwd-lat');
+        const lonEl = document.getElementById('fwd-lon');
+        if (latEl) latEl.value = d.lat.toFixed(4);
+        if (lonEl) lonEl.value = d.lon.toFixed(4);
       } else if (state.activeTab === 'reverse') {
-        document.getElementById('rev-lat').value = d.lat.toFixed(4);
-        document.getElementById('rev-lon').value = d.lon.toFixed(4);
+        const latEl = document.getElementById('rev-lat');
+        const lonEl = document.getElementById('rev-lon');
+        if (latEl) latEl.value = d.lat.toFixed(4);
+        if (lonEl) lonEl.value = d.lon.toFixed(4);
       }
     });
 
@@ -361,7 +390,7 @@ function initWindStreamlines() {
   state.windStreamlines = [];
   if (!state.canvas) return;
 
-  const count = 320; // Hundreds of graceful particles
+  const count = 300;
   const W = state.canvas.width;
   const H = state.canvas.height;
 
@@ -369,11 +398,12 @@ function initWindStreamlines() {
     state.windStreamlines.push({
       x: Math.random() * W,
       y: Math.random() * H,
-      len: 12 + Math.random() * 22,
-      speed: 1.5 + Math.random() * 2.2,
+      len: 14 + Math.random() * 24,
+      speed: 1.6 + Math.random() * 2.2,
+      width: 1.2 + Math.random() * 0.8,
       life: Math.random() * 100,
       maxLife: 60 + Math.random() * 80,
-      alpha: 0.2 + Math.random() * 0.45,
+      alpha: 0.35 + Math.random() * 0.55,
     });
   }
 }
@@ -388,32 +418,44 @@ function renderWindStreamlines() {
   // Clear canvas overlay for next frame
   ctx.clearRect(0, 0, W, H);
 
-  // Direction angle (wind direction is where it comes from; particles flow towards dir + 180°)
-  const rad = ((state.weather.direction_deg + 180 - 90) * Math.PI) / 180.0;
-  const dx = Math.cos(rad);
-  const dy = Math.sin(rad);
+  // Meteorological wind direction:
+  // θ = direction from which wind blows (0° = North, 90° = East, etc.)
+  // Motion vector on screen (x = East, y = South):
+  // dx = -sin(θ), dy = +cos(θ)
+  const rad = ((state.weather.direction_deg || 0) * Math.PI) / 180.0;
+  const dx = -Math.sin(rad);
+  const dy = Math.cos(rad);
 
-  const speedMult = Math.max(0.8, state.weather.speed_kmh / 20.0);
+  const speedMult = Math.max(0.6, (state.weather.speed_kmh || 20.0) / 18.0);
 
-  ctx.lineWidth = 1.4;
   ctx.lineCap = 'round';
 
   for (const p of state.windStreamlines) {
-    ctx.strokeStyle = `rgba(224, 242, 254, ${p.alpha * 0.75})`;
+    const headX = p.x + dx * p.len;
+    const headY = p.y + dy * p.len;
+
+    const grad = ctx.createLinearGradient(p.x, p.y, headX, headY);
+    grad.addColorStop(0, `rgba(186, 230, 253, 0)`);
+    grad.addColorStop(0.65, `rgba(224, 242, 254, ${p.alpha * 0.5})`);
+    grad.addColorStop(1, `rgba(255, 255, 255, ${p.alpha * 0.95})`);
+
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = p.width;
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
-    ctx.lineTo(p.x + dx * p.len, p.y + dy * p.len);
+    ctx.lineTo(headX, headY);
     ctx.stroke();
 
     p.x += dx * p.speed * speedMult;
     p.y += dy * p.speed * speedMult;
     p.life++;
 
-    // Re-spawn
-    if (p.life > p.maxLife || p.x < -30 || p.x > W + 30 || p.y < -30 || p.y > H + 30) {
-      p.x = Math.random() * W;
-      p.y = Math.random() * H;
+    // Re-spawn with edge offset
+    if (p.life > p.maxLife || p.x < -80 || p.x > W + 80 || p.y < -80 || p.y > H + 80) {
+      p.x = Math.random() * W - dx * (Math.random() * 120);
+      p.y = Math.random() * H - dy * (Math.random() * 120);
       p.life = 0;
+      p.maxLife = 60 + Math.random() * 90;
     }
   }
 }
@@ -698,7 +740,7 @@ function updateWeatherUI() {
   const sSec = document.getElementById('wx-sector');
   if (sSec) sSec.textContent = `${w.sector_name.toUpperCase()}`;
   const sDeg = document.getElementById('wx-deg');
-  if (sDeg) sDeg.textContent = `Bearing: ${w.direction_deg}° (${w.speed_category})`;
+  if (sDeg) sDeg.textContent = `${w.direction_deg}° • ${w.speed_category}`;
   const sSpd = document.getElementById('wx-speed');
   if (sSpd) sSpd.textContent = `${w.speed_ms} m/s`;
   const sKts = document.getElementById('wx-knots');
@@ -942,6 +984,14 @@ function setupLayerToggles() {
       else btn.classList.remove('active');
       if (onChange) onChange();
     });
+  });
+
+  // Basemap Switcher Listeners
+  ['dark', 'sat', 'osm'].forEach((bm) => {
+    const btn = document.getElementById(`btn-bm-${bm}`);
+    if (btn) {
+      btn.addEventListener('click', () => setBasemap(bm));
+    }
   });
 }
 

@@ -29,7 +29,7 @@
             }
         }
     </script>
-    <link rel="stylesheet" href="/static/css/styles.css?v=3">
+    <link rel="stylesheet" href="/static/css/styles.css?v=4">
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-cyan-500 selection:text-slate-950">
     <!-- Top Navigation & Telemetry Bar -->
@@ -83,7 +83,7 @@
                     <div class="space-y-0.5">
                         <div class="text-[10px] text-slate-400">SECTOR / BEARING</div>
                         <div id="wx-sector" class="text-emerald-400 font-bold text-sm">POYRAZ (NE)</div>
-                        <div id="wx-deg" class="text-slate-400 text-[11px]">Bearing: 45° True</div>
+                        <div id="wx-deg" class="text-slate-400 text-[11px]">354° • Moderate</div>
                     </div>
                     <div class="space-y-0.5">
                         <div class="text-[10px] text-slate-400">WIND SPEED</div>
@@ -121,7 +121,7 @@
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <div>
-                            <label class="block text-slate-400 mb-1">Particles ($N$)</label>
+                            <label class="block text-slate-400 mb-1">Particles (N)</label>
                             <input id="fwd-particles" type="number" min="5" max="500" value="100" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                         <div>
@@ -131,7 +131,7 @@
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <div>
-                            <label class="block text-slate-400 mb-1">Time Step $\Delta t$ (s)</label>
+                            <label class="block text-slate-400 mb-1">Time Step Δt (s)</label>
                             <input id="fwd-dt" type="number" step="1" min="1" max="60" value="10.0" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                         <div>
@@ -151,7 +151,7 @@
                         <label for="fwd-use-live-wind" class="text-slate-300">Apply Live Wind Drift (Open-Meteo)</label>
                     </div>
                     <div id="fwd-oil-group" class="pt-1">
-                        <label class="block text-slate-400 mb-1">Oil Spill Volume ($m^3$)</label>
+                        <label class="block text-slate-400 mb-1">Oil Spill Volume (m³)</label>
                         <input id="fwd-spill" type="number" step="1" min="1" max="1000" value="10.0" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                     </div>
                     <button type="submit" id="btn-submit-forward" class="w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold py-2 rounded transition-colors shadow-lg shadow-cyan-950/40">
@@ -184,7 +184,7 @@
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <div>
-                            <label class="block text-slate-400 mb-1">Particles ($N$)</label>
+                            <label class="block text-slate-400 mb-1">Particles (N)</label>
                             <input id="rev-particles" type="number" min="5" max="300" value="50" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                         <div>
@@ -194,7 +194,7 @@
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <div>
-                            <label class="block text-slate-400 mb-1">Time Step $\Delta t$ (s)</label>
+                            <label class="block text-slate-400 mb-1">Time Step Δt (s)</label>
                             <input id="rev-dt" type="number" step="1" min="1" max="60" value="10.0" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 font-mono">
                         </div>
                         <div>
@@ -310,12 +310,20 @@
                     <span class="text-slate-500 hidden sm:inline">| Real GIS Maritime Digital Twin</span>
                 </div>
 
-                <!-- Layer Toggles -->
-                <div class="flex items-center space-x-1.5 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-[11px]">
-                    <button id="toggle-layer-wind-flow" class="layer-pill active px-2.5 py-1 rounded transition-all">Wind Streamlines</button>
-                    <button id="toggle-layer-districts" class="layer-pill active px-2.5 py-1 rounded transition-all">District Wind Badges</button>
-                    <button id="toggle-layer-bridges" class="layer-pill active px-2.5 py-1 rounded transition-all">Suspension Bridges</button>
-                    <button id="toggle-layer-tss" class="layer-pill active px-2.5 py-1 rounded transition-all">TSS Shipping Lanes</button>
+                <!-- Layer Toggles & Basemap Switcher -->
+                <div class="flex items-center flex-wrap gap-1.5">
+                    <div class="flex items-center space-x-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-[11px]">
+                        <button id="toggle-layer-wind-flow" class="layer-pill active px-2.5 py-1 rounded transition-all">Wind Streamlines</button>
+                        <button id="toggle-layer-districts" class="layer-pill active px-2.5 py-1 rounded transition-all">District Wind Badges</button>
+                        <button id="toggle-layer-bridges" class="layer-pill active px-2.5 py-1 rounded transition-all">Bridges</button>
+                        <button id="toggle-layer-tss" class="layer-pill active px-2.5 py-1 rounded transition-all">TSS Fairways</button>
+                    </div>
+                    <div class="flex items-center space-x-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-[11px]">
+                        <span class="text-slate-400 px-1 text-[10px] uppercase font-semibold">Map:</span>
+                        <button id="btn-bm-dark" class="basemap-pill active px-2 py-0.5 rounded text-[10px] font-mono">Dark</button>
+                        <button id="btn-bm-sat" class="basemap-pill px-2 py-0.5 rounded text-[10px] font-mono">Satellite</button>
+                        <button id="btn-bm-osm" class="basemap-pill px-2 py-0.5 rounded text-[10px] font-mono">Street</button>
+                    </div>
                 </div>
 
                 <!-- Right Cursor Telemetry -->
@@ -384,6 +392,6 @@
     <!-- Leaflet JS CDN -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- Client Scripts -->
-    <script src="/static/js/dashboard.js?v=3"></script>
+    <script src="/static/js/dashboard.js?v=4"></script>
 </body>
 </html>
