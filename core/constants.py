@@ -241,7 +241,9 @@ MAX_POSSIBLE_GROUND_SPEED_MS: Final[float] = 18.0
 ROUTING_FUEL_PENALTY_FACTOR: Final[float] = 1.5
 CURRENT_HEAD_PENALTY_FACTOR: Final[float] = 1.5  # Backward-compatible alias
 
-# Fuel proxy conversion factor (liters of Marine Gas Oil per km-hour equivalent)
+# Fuel consumption proxy factor (relative units per km-hour equivalent).
+# Assumes a constant nominal engine burn rate proportional to elapsed transit time
+# and distance traveled, expressed in relative fuel proxy units rather than specific MGO liters.
 FUEL_CONSUMPTION_PROXY_FACTOR: Final[float] = 14.2
 
 # ---------------------------------------------------------------------------

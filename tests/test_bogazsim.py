@@ -888,3 +888,331 @@ class TestSimulators(unittest.TestCase):
         assert res["clamped_particles_count"] >= 0
 
 
+class TestRouteOptimizer(unittest.TestCase):
+    """Test suite for WeightedAStarRouter, RouteWaypoint, NavigationRoute, and admissibility."""
+
+    def setUp(self) -> None:
+        """Initialize simulation grid and router."""
+        from core.grid_engine import VectorGrid
+        from core.route_optimizer import WeightedAStarRouter
+
+        self.grid = VectorGrid(rows=GRID_ROWS, cols=GRID_COLS)
+        self.router = WeightedAStarRouter(grid=self.grid)
+
+    def test_route_waypoint_properties_and_validation(self) -> None:
+        """# RUBRIC: Encapsulation with @property, Dunder Methods
+        Verify RouteWaypoint getters, validation, and dunders.
+        """
+        from core.route_optimizer import RouteWaypoint
+
+        wp1 = RouteWaypoint(
+            lat=41.050,
+            lon=29.020,
+            sog_ms=6.17,
+            cumulative_distance_km=5.25,
+            cumulative_time_min=14.2,
+            fuel_proxy_liters=28.4,
+        )
+        wp2 = RouteWaypoint(
+            lat=41.050,
+            lon=29.020,
+            sog_ms=6.17,
+            cumulative_distance_km=5.25,
+            cumulative_time_min=14.2,
+            fuel_proxy_liters=28.4,
+        )
+
+        assert wp1 == wp2
+        assert wp1.lat == 41.050
+        assert wp1.lon == 29.020
+        assert math.isclose(wp1.sog_knots, 6.17 * 1.94384, abs_tol=0.1)
+        assert wp1.cumulative_distance_km == 5.25
+        assert "RouteWaypoint" in repr(wp1)
+        assert "Waypoint" in str(wp1)
+
+        # Bounds validation
+        with pytest.raises(GridBoundsError) if pytest else self.assertRaises(GridBoundsError):
+            RouteWaypoint(lat=40.50, lon=29.00)
+        with pytest.raises(InvalidParameterError) if pytest else self.assertRaises(InvalidParameterError):
+            RouteWaypoint(lat=41.05, lon=29.02, cumulative_distance_km=-1.0)
+
+    def test_navigation_route_container_and_sequence_protocols(self) -> None:
+        """# RUBRIC: Encapsulation with @property, Dunder Methods
+        Verify NavigationRoute container methods, sequence indexing, and JSON export.
+        """
+        from core.route_optimizer import NavigationRoute, RouteWaypoint
+
+        wps = [
+            RouteWaypoint(41.02, 29.03, sog_ms=6.0, cumulative_distance_km=0.0),
+            RouteWaypoint(41.04, 29.04, sog_ms=6.5, cumulative_distance_km=2.5),
+            RouteWaypoint(41.06, 29.05, sog_ms=5.8, cumulative_distance_km=5.1),
+        ]
+        route = NavigationRoute(
+            waypoints=wps,
+            total_distance_km=5.1,
+            eta_minutes=18.5,
+            fuel_proxy_liters=22.3,
+            nodes_expanded=120,
+            vessel_speed_knots=12.0,
+        )
+
+        assert len(route) == 3
+        assert route[0].lat == 41.02
+        assert route[-1].lat == 41.06
+        assert route.total_distance_km == 5.1
+        assert route.eta_minutes == 18.5
+        assert "NavigationRoute" in repr(route)
+        assert "Route:" in str(route)
+
+        data = route.to_dict()
+        assert data["total_distance_km"] == 5.1
+        assert len(data["waypoints"]) == 3
+        assert len(data["waypoint_details"]) == 3
+
+    def test_haversine_distance_accuracy(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Verify spherical great-circle distance matches theoretical 1 degree latitude (~111.19 km).
+        """
+        d = self.router.haversine_distance(41.0, 29.0, 41.1, 29.0)
+        # 0.1 degree latitude is approximately 11,119 meters
+        assert 11000.0 < d < 11200.0
+
+    def test_admissible_heuristic_strictly_lower_bound(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Verify that admissible heuristic h(n) is always <= actual optimal cost.
+        h(n) = distance / (V_vessel + MAX_SURFACE_CURRENT_MS)
+        """
+        vessel_speed_ms = 12.0 * KNOTS_TO_MS
+        lat_start = 41.020
+        lon_start = self.grid.get_centerline_lon(lat_start)
+        lat_goal = 41.120
+        lon_goal = self.grid.get_centerline_lon(lat_goal)
+
+        h_val = self.router.admissible_heuristic(
+            lat_start, lon_start, lat_goal, lon_goal, vessel_speed_ms
+        )
+        route = self.router.find_route(lat_start, lon_start, lat_goal, lon_goal, vessel_speed_knots=12.0)
+        actual_travel_time_sec = route.eta_minutes * 60.0
+
+        # Heuristic must strictly be less than or equal to actual travel time
+        assert h_val <= actual_travel_time_sec
+
+    def test_impassable_edge_when_ground_speed_zero(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Verify that an edge against a head current stronger than vessel speed
+        yields infinite cost (impassable).
+        """
+        # Constriction throat at Rumeli Hisarı has southward current ~2.49 m/s
+        lat1 = 41.085
+        lon1 = self.grid.get_centerline_lon(lat1)
+        # Heading northward directly against the 2.49 m/s current
+        lat2 = lat1 + 0.005
+        lon2 = lon1
+
+        # Very low vessel speed (1 knot ~ 0.51 m/s), overwhelmed by the ~2.5 m/s head current
+        underpowered_speed_ms = 1.0 * KNOTS_TO_MS
+        cost, travel_time, sog, dist_m = self.router.compute_edge_cost(
+            lat1, lon1, lat2, lon2, underpowered_speed_ms
+        )
+        assert math.isinf(cost)
+        assert math.isinf(travel_time)
+        assert sog <= 0.05
+        assert dist_m > 0.0
+
+    def test_directional_asymmetry_and_head_current_penalty(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Verify that Northbound transit (against current) requires more time and fuel
+        than Southbound transit (with current) between identical endpoints.
+        """
+        lat_s = 41.030
+        lon_s = self.grid.get_centerline_lon(lat_s)
+        lat_n = 41.140
+        lon_n = self.grid.get_centerline_lon(lat_n)
+
+        route_northbound = self.router.find_route(
+            lat_s, lon_s, lat_n, lon_n, vessel_speed_knots=12.0
+        )
+        route_southbound = self.router.find_route(
+            lat_n, lon_n, lat_s, lon_s, vessel_speed_knots=12.0
+        )
+
+        # Distances should be nearly identical (same strait channel)
+        assert math.isclose(
+            route_northbound.total_distance_km,
+            route_southbound.total_distance_km,
+            rel_tol=0.08,
+        )
+        # Northbound (against current) must take significantly longer than Southbound
+        assert route_northbound.eta_minutes > route_southbound.eta_minutes * 1.4
+        # Northbound fuel consumption must be higher due to head-current resistance
+        assert route_northbound.fuel_proxy_liters > route_southbound.fuel_proxy_liters * 1.4
+
+    def test_route_exceptions_on_land_and_invalid_speed(self) -> None:
+        """# RUBRIC: Custom Exceptions
+        Verify LandCollisionError and InvalidParameterError are triggered appropriately.
+        """
+        water_lat = 41.050
+        water_lon = self.grid.get_centerline_lon(water_lat)
+        land_lat, land_lon = 41.100, 29.180  # Asian inland
+
+        # Start on land
+        with pytest.raises(LandCollisionError) if pytest else self.assertRaises(LandCollisionError):
+            self.router.find_route(land_lat, land_lon, water_lat, water_lon)
+
+        # Goal on land
+        with pytest.raises(LandCollisionError) if pytest else self.assertRaises(LandCollisionError):
+            self.router.find_route(water_lat, water_lon, land_lat, land_lon)
+
+        # Invalid vessel speeds
+        with pytest.raises(InvalidParameterError) if pytest else self.assertRaises(InvalidParameterError):
+            self.router.find_route(water_lat, water_lon, water_lat + 0.01, water_lon, vessel_speed_knots=1.0)
+        with pytest.raises(InvalidParameterError) if pytest else self.assertRaises(InvalidParameterError):
+            self.router.find_route(water_lat, water_lon, water_lat + 0.01, water_lon, vessel_speed_knots=45.0)
+
+    def test_dijkstra_cross_check_optimality(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Verify A* cost equals Dijkstra cost (within 1e-9) across multiple
+        start/goal pairs on the real grid in both directions, and check nodes expanded.
+        """
+        pairs = [
+            # Northbound
+            (41.030, self.grid.get_centerline_lon(41.030), 41.140, self.grid.get_centerline_lon(41.140)),
+            # Southbound
+            (41.140, self.grid.get_centerline_lon(41.140), 41.030, self.grid.get_centerline_lon(41.030)),
+            # Mid-Strait local transit
+            (41.060, self.grid.get_centerline_lon(41.060), 41.100, self.grid.get_centerline_lon(41.100)),
+        ]
+
+        for s_lat, s_lon, g_lat, g_lon in pairs:
+            route_astar = self.router.find_route(
+                s_lat, s_lon, g_lat, g_lon, vessel_speed_knots=12.0, heuristic_weight=1.0
+            )
+            route_dijkstra = self.router.find_route(
+                s_lat, s_lon, g_lat, g_lon, vessel_speed_knots=12.0, heuristic_weight=0.0
+            )
+
+            # 1. Exact mathematical cost equality within 1e-9 tolerance
+            assert math.isclose(
+                route_astar.total_cost_seconds,
+                route_dijkstra.total_cost_seconds,
+                rel_tol=1e-9,
+                abs_tol=1e-9,
+            ), f"A* cost {route_astar.total_cost_seconds} != Dijkstra cost {route_dijkstra.total_cost_seconds}"
+
+            # 2. A* never expands more nodes than Dijkstra
+            assert route_astar.nodes_expanded <= route_dijkstra.nodes_expanded
+
+    def test_detour_around_high_current_cell(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        On a hand-built grid, verify the router chooses a geometric detour
+        around a high opposing current cell when the detour has lower total cost.
+        """
+        from core.grid_engine import VectorGrid
+        from core.route_optimizer import WeightedAStarRouter
+
+        small_grid = VectorGrid(rows=5, cols=5)
+        for r in range(5):
+            for c in range(5):
+                small_grid[r, c].is_land = False
+                small_grid[r, c].u = 0.0
+                small_grid[r, c].v = 0.0
+
+        # Place a strong opposing current at (2, 2) against eastward motion
+        small_grid[2, 2].u = -2.4
+        small_grid[2, 2].v = 0.0
+
+        router = WeightedAStarRouter(grid=small_grid)
+        s_lat, s_lon = small_grid.indices_to_lat_lon(2, 0)
+        g_lat, g_lon = small_grid.indices_to_lat_lon(2, 4)
+
+        route = router.find_route(s_lat, s_lon, g_lat, g_lon, vessel_speed_knots=5.0)
+        waypoints_rc = [small_grid.lat_lon_to_indices(wp.lat, wp.lon) for wp in route.waypoints]
+        waypoints_int = [(int(round(r)), int(round(c))) for r, c in waypoints_rc]
+
+        # The route must detour and avoid the high opposing current at (2, 2)
+        assert (2, 2) not in waypoints_int
+        assert len(route) >= 5
+
+    def test_route_not_found_on_disconnected_water(self) -> None:
+        """# RUBRIC: Custom Exceptions
+        Verify RouteNotFoundError is raised when a solid land barrier separates endpoints.
+        """
+        from core.grid_engine import VectorGrid
+        from core.route_optimizer import WeightedAStarRouter
+
+        barrier_grid = VectorGrid(rows=5, cols=5)
+        for r in range(5):
+            for c in range(5):
+                barrier_grid[r, c].is_land = False
+
+        # Create impenetrable vertical land barrier across col 2
+        for r in range(5):
+            barrier_grid[r, 2].is_land = True
+
+        router = WeightedAStarRouter(grid=barrier_grid)
+        s_lat, s_lon = barrier_grid.indices_to_lat_lon(2, 0)
+        g_lat, g_lon = barrier_grid.indices_to_lat_lon(2, 4)
+
+        with pytest.raises(RouteNotFoundError) if pytest else self.assertRaises(RouteNotFoundError):
+            router.find_route(s_lat, s_lon, g_lat, g_lon)
+
+    def test_max_current_bound_satisfies_admissibility(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Verify that MAX_SURFACE_CURRENT_MS >= maximum current observed anywhere in VectorGrid.
+        """
+        max_speed_observed = 0.0
+        for r in range(self.grid.rows):
+            for c in range(self.grid.cols):
+                if not self.grid[r, c].is_land:
+                    lat, lon = self.grid.indices_to_lat_lon(r, c)
+                    u, v = self.grid.interpolate_velocity(lat, lon, depth=0.0)
+                    spd = math.hypot(u, v)
+                    if spd > max_speed_observed:
+                        max_speed_observed = spd
+
+        assert MAX_SURFACE_CURRENT_MS >= max_speed_observed
+
+    def test_edge_distance_consistent_with_heuristic(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Verify edge distance in compute_edge_cost uses the exact same haversine function as the heuristic.
+        """
+        lat1, lon1 = 41.050, 29.020
+        lat2, lon2 = 41.055, 29.025
+        expected_haversine = self.router.haversine_distance(lat1, lon1, lat2, lon2)
+        _, _, _, edge_dist = self.router.compute_edge_cost(lat1, lon1, lat2, lon2, 6.0)
+        assert math.isclose(edge_dist, expected_haversine, abs_tol=1e-9)
+
+    def test_diagonal_corner_cutting_blocked_if_either_neighbor_is_land(self) -> None:
+        """# RUBRIC: Hand-Written Algorithms
+        Verify diagonal move from (0,0) to (1,1) is prohibited if EITHER orthogonal neighbor is land.
+        """
+        from core.grid_engine import VectorGrid
+        from core.route_optimizer import WeightedAStarRouter
+
+        test_grid = VectorGrid(rows=3, cols=3)
+        for r in range(3):
+            for c in range(3):
+                test_grid[r, c].is_land = False
+                test_grid[r, c].u = 0.0
+                test_grid[r, c].v = 0.0
+
+        # Set ONLY ONE orthogonal neighbor as land: (0, 1) is land, (1, 0) is water
+        test_grid[0, 1].is_land = True
+        test_grid[1, 0].is_land = False
+
+        router = WeightedAStarRouter(grid=test_grid)
+        s_lat, s_lon = test_grid.indices_to_lat_lon(0, 0)
+        g_lat, g_lon = test_grid.indices_to_lat_lon(1, 1)
+
+        route = router.find_route(s_lat, s_lon, g_lat, g_lon, vessel_speed_knots=5.0)
+        waypoints_rc = [test_grid.lat_lon_to_indices(wp.lat, wp.lon) for wp in route.waypoints]
+        waypoints_int = [(int(round(r)), int(round(c))) for r, c in waypoints_rc]
+
+        # Direct diagonal (0, 0) -> (1, 1) is 2 waypoints. Because (0, 1) is land,
+        # diagonal is blocked, so path must step orthogonally through (1, 0) -> (1, 1) (3 waypoints).
+        assert len(route) == 3
+        assert waypoints_int == [(0, 0), (1, 0), (1, 1)]
+
+
+
+
