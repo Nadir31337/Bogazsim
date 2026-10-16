@@ -179,6 +179,34 @@ The FastAPI application provides 11 endpoints serving JSON data, GeoJSON geometr
 
 ---
 
+## Limitations & Validation
+
+While BoğazSim models hydrodynamic and kinematic behaviors for educational and demonstration purposes, several important physical and architectural limitations apply:
+
+1. **Analytical Hydrodynamic Approximations**:
+   - The velocity vector field is generated via an idealized mathematical formulation: Venturi-style longitudinal acceleration ($V_{\text{surface}}(y) = V_{\min} + (V_{\max}-V_{\min}) \cdot \frac{W_{\min}}{W(y)}$), localized Lamb-Oseen vortices representing coastal counter-eddies at Bebek and Kandilli, and an idealized two-layer stratified density boundary at 35 m depth.
+   - **Validation Status**: The flow field is an analytical approximation designed for classroom demonstration. It has **not** been calibrated against or validated with in-situ oceanographic observations, such as Acoustic Doppler Current Profiler (ADCP) transects or drifter tracking data in the Istanbul Strait.
+2. **Empirical Parameter Sourcing & Assumptions**:
+   - **Fay Oil Spreading Model**: Oil slick spreading in the gravity-viscous regime ($A(t) = A_0 + \kappa \sqrt{t}$) uses empirical constant $k_2 = 1.45$ and physical brackish water parameters ($\rho_w = 1015\text{ kg/m}^3, \rho_o = 860\text{ kg/m}^3$) sourced from J.A. Fay (1971, *"Physical Processes in the Spread of Oil on a Water Surface"*, Proc. Joint Conf. Prevention & Control of Oil Spills).
+   - **Leeway Drift Coefficients**: Person-in-water ($0.015$, `PIW_WINDAGE_COEFF`), life raft ($0.040$, `LIFERAFT_WINDAGE_COEFF`), and disabled vessel ($0.030$, `BOAT_WINDAGE_COEFF`) are empirical model assumptions adapted from generalized search-and-rescue guidelines (such as Allen & Plourde 1999 leeway tables), but are not calibrated to specific local vessel geometries or sea states.
+   - **Turbulent Diffusion**: Brownian motion dispersion standard deviations ($\sigma_{\text{water}} = 0.15\text{ m/s}$, $\sigma_{\text{wind}} = 1.00\text{ m/s}$ in `core/constants.py`) are nominal model assumptions representing sub-grid-scale turbulent mixing.
+   - **Fuel Consumption Proxy**: Route fuel expenditure (`FUEL_CONSUMPTION_PROXY_FACTOR = 14.2` in `core/constants.py`) is an uncalibrated relative proxy proportional to transit time and head-current penalty, not calibrated to specific marine diesel engine fuel telemetry.
+3. **Single-User State Architecture**:
+   - The FastAPI backend maintains simulation and route history in a single in-memory `SimulationStateManager` protected by a `threading.Lock`.
+   - The application is architected as an interactive single-user capstone demonstration; concurrent simulations from multiple web clients will serialize and overwrite the active telemetry state.
+4. **Numerical Stability & Courant Number**:
+   - As noted in the formulation section, the typical Courant number ($\mathcal{C} \approx 0.19$ for $\Delta t = 10\text{ s}$) keeps advecting particles from skipping grid cells and helps accuracy, but does not provide a strict mathematical stability guarantee for discrete particle tracking near complex shorelines.
+5. **Cross-Current Crabbing**:
+   - A\* route optimization projects local current vectors directly onto the vessel's heading direction. It does not model lateral drift angle ("crabbing") or the extra engine power required to counteract transverse leeway in strong cross-currents.
+
+### Future Work
+- Quantitative validation against published Bosphorus ADCP current transects and surface drifter datasets.
+- Replacement of the analytical depth profile with high-resolution digital bathymetry grids (e.g., GEBCO or navigational hydrographic soundings).
+- Multi-user session management using tokenized state or per-client simulation containers.
+- Dynamic wind-wave interaction (JONSWAP or Pierson-Moskowitz wave spectra) for wave-induced Stokes drift.
+
+---
+
 ## Further Documentation
 
 Detailed documentation, technical derivations, and oral defense materials are maintained in the **[`docs/`](docs/)** directory:
