@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.13-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/Tests-104%20Passing%20(3.25s)-brightgreen.svg)]()
+[![Tests](https://github.com/Nadir31337/Bogazsim/actions/workflows/tests.yml/badge.svg)](https://github.com/Nadir31337/Bogazsim/actions/workflows/tests.yml)
 [![License](https://img.shields.io/badge/License-Academic%20Capstone-lightgrey.svg)]()
 
 **BoğazSim** is an interactive maritime simulation environment and mission-control digital twin for the Istanbul Strait (Bosphorus). Developed as a university senior capstone project for SEN4015 (Advanced Programming with Python), it combines computational hydrodynamics, Lagrangian stochastic particle tracking for Search and Rescue (SAR), backward-in-time datum backtracking, and vessel passage planning through one of the world's most congested and navigationally challenging maritime chokepoints.
