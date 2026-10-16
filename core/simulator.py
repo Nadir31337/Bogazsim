@@ -163,15 +163,21 @@ class ForwardSwarmSimulator:
 
                 new_lat, new_lon = self.integrator.step(p.lat, p.lon, perturbed_velocity, dt)
 
-                if self.grid.is_land(new_lat, new_lon):
-                    if beach_on_collision:
-                        p.is_beached = True
-                    else:
-                        from core.exceptions import LandCollisionError
-                        raise LandCollisionError(new_lat, new_lon)
+                res_lat, res_lon, beached, _ = self.grid.resolve_movement(
+                    p.lat, p.lon, new_lat, new_lon,
+                    beach_on_collision=beach_on_collision,
+                )
+
+                if beached:
+                    p.is_beached = True
+                    p.lat = res_lat
+                    p.lon = res_lon
+                elif self.grid.segment_intersects_land(p.lat, p.lon, new_lat, new_lon) and not beach_on_collision:
+                    from core.exceptions import LandCollisionError
+                    raise LandCollisionError(new_lat, new_lon)
                 else:
-                    p.lat = new_lat
-                    p.lon = new_lon
+                    p.lat = res_lat
+                    p.lon = res_lon
                 p._trajectory.append((p.lat, p.lon))
 
         # Compute landing probability heatmap and summary statistics
@@ -321,7 +327,7 @@ class ReverseTracker:
                 new_lat, new_lon = self.integrator.step(p.lat, p.lon, velocity_fn, dt_reverse)
                 
                 # In reverse tracking, do not clip silently: track clamped steps
-                if not self.grid.is_land(new_lat, new_lon):
+                if not self.grid.segment_intersects_land(p.lat, p.lon, new_lat, new_lon):
                     p.lat = new_lat
                     p.lon = new_lon
                 else:

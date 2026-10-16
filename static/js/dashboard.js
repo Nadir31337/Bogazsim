@@ -13,7 +13,7 @@ const LAT_MAX = 41.25;
 const LON_MIN = 28.95;
 const LON_MAX = 29.20;
 const CONSTRICTION_LAT = 41.085;
-const CONSTRICTION_LON = 29.0565;
+const CONSTRICTION_LON = 29.0621;
 
 // Application State
 const state = {
@@ -103,7 +103,7 @@ const BOSPHORUS_COASTLINE = [
   [41.0660, 29.0410, 29.0580],  // Arnavutköy / Vaniköy
   [41.0730, 29.0445, 29.0620],  // Akıntı Burnu / Kandilli
   [41.0800, 29.0440, 29.0620],  // Bebek Bay / Aşiyan / Kandilli North
-  [41.0855, 29.0565, 29.0660],  // Rumeli Hisarı / Anadolu Hisarı (The Narrows)
+  [41.0855, 29.0575, 29.0660],  // Rumeli Hisarı / Anadolu Hisarı (The Narrows)
   [41.0915, 29.0570, 29.0690],  // FSM Bridge
   [41.0990, 29.0570, 29.0700],  // Baltalimanı / Kanlıca
   [41.1100, 29.0575, 29.0780],  // Emirgan / Çubuklu
@@ -213,6 +213,27 @@ function initMap() {
   // Add default Dark Canvas basemap
   state.activeBaseLayer = 'dark';
   state.baseLayers.dark.addTo(state.map);
+
+  // Load high-precision GIS coastline boundaries
+  fetch('/api/geojson/coastline')
+    .then((res) => (res.ok ? res.json() : null))
+    .then((geoData) => {
+      if (geoData && state.map) {
+        state.coastlineLayer = L.geoJSON(geoData, {
+          style: (feature) => {
+            const isIsland = feature.properties && feature.properties.type === 'island';
+            return {
+              color: isIsland ? '#f59e0b' : '#38bdf8',
+              weight: isIsland ? 1.5 : 1.0,
+              opacity: 0.6,
+              fillColor: isIsland ? '#f59e0b' : '#0284c7',
+              fillOpacity: 0.08,
+            };
+          },
+        }).addTo(state.map);
+      }
+    })
+    .catch(() => {});
 
   // Setup Animation Canvas Overlay
   initAnimationCanvas();

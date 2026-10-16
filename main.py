@@ -498,6 +498,13 @@ def get_grid_metadata() -> dict[str, Any]:
     }
 
 
+@app.get("/api/geojson/coastline")
+def get_coastline_geojson() -> dict[str, Any]:
+    """Retrieve authoritative OpenStreetMap coastline GeoJSON for Istanbul Bosphorus."""
+    from core.geographic_service import get_geographic_service
+    return get_geographic_service().get_geojson()
+
+
 @app.post("/api/simulate/forward")
 def simulate_forward(req: ForwardSimulationRequest) -> dict[str, Any]:
     """Execute stochastic Monte Carlo forward drift swarm simulation.
