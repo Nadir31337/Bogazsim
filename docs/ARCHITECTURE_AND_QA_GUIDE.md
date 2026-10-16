@@ -2,7 +2,7 @@
 
 **Course**: SEN4015 Advanced Programming with Python — Capstone Project  
 **Topic**: Istanbul Bosphorus Hydrodynamics, Monte Carlo SAR Swarm Tracking, Reverse Datum Backtracking & Weighted A* Vessel Routing  
-**Version**: 1.0.0 Production Release  
+**Version**: 1.0.0 (Academic Capstone Release)  
 
 ---
 
@@ -98,7 +98,7 @@ flowchart TD
 > $$s = \frac{x - x_j}{\Delta x}, \quad t = \frac{y - y_i}{\Delta y}, \quad s, t \in [0, 1)$$
 > The continuous velocity vector $\mathbf{u}(x, y)$ is:
 > $$\mathbf{u}(x, y) = (1-s)(1-t)\mathbf{u}_{i,j} + s(1-t)\mathbf{u}_{i, j+1} + (1-s)t\mathbf{u}_{i+1, j} + st\mathbf{u}_{i+1, j+1}$$
-> This guarantees $C^0$ spatial continuity, preventing artificial velocity shearing during particle advection.
+> This provides $C^0$ spatial continuity, smoothing velocity variations during particle advection.
 
 ---
 
@@ -122,7 +122,7 @@ flowchart TD
 > In Eulerian finite-difference fluid solvers, the CFL condition $\mathcal{C} = \frac{u \Delta t}{\Delta x} \le 1.0$ is a strict mathematical requirement for numerical stability (preventing unbounded error growth).
 > In **Lagrangian particle tracking**, particles are advected through a precomputed velocity field. Here:
 > $$\mathcal{C} = \frac{V_{\max} \Delta t}{\Delta x_{\min}} \approx \frac{2.5\text{ m/s} \times 10.0\text{ s}}{131.0\text{ m}} \approx 0.19$$
-> A Courant number of about $0.19$ keeps particles from skipping grid cells and helps accuracy; it is not a strict stability guarantee for particle tracking. Because $\mathcal{C} \ll 1.0$, a particle travels at most $\sim 19\%$ of a grid cell per timestep, guaranteeing that bilinear interpolation samples every intermediate velocity gradient and correctly detects shoreline collision boundaries.
+> A Courant number of about $0.19$ keeps particles from skipping grid cells and helps accuracy; it is not a strict stability guarantee for particle tracking. Because $\mathcal{C} \ll 1.0$, a particle travels at most $\sim 19\%$ of a grid cell per timestep, helping ensure that bilinear interpolation samples intermediate velocity gradients and detects shoreline collision boundaries.
 
 ### Q7: How does the Monte Carlo stochastic leeway and Brownian dispersion model work?
 > **Answer**:
@@ -183,7 +183,7 @@ flowchart TD
 > Forward diffusion is dissipative and entropy-increasing; running diffusion backward in time is mathematically ill-posed because small observational errors in the sighting position exponentially amplify upstream ($\sim e^{+\lambda t}$).
 > BoğazSim maintains stability through two mechanisms:
 > 1. **Forward Stochastic Perturbation**: Rather than computing an ill-posed negative diffusion operator ($\nabla^2 u < 0$), the tracker samples forward-time stochastic paths in reverse velocity space, transforming the problem into a Bayesian Monte Carlo importance sampling process.
-> 2. **Covariance Regularization**: If all particles converge or collapse along a singular streamline, $\det(\boldsymbol{\Sigma}) \to 0$. A small Tikhonov regularizer $\epsilon \mathbf{I}$ ($\epsilon = 10^{-6}$) is added to the diagonal before eigenvalue decomposition, guaranteeing strictly positive eigenvalues and non-singular ellipses.
+> 2. **Covariance Regularization**: If all particles converge or collapse along a singular streamline, $\det(\boldsymbol{\Sigma}) \to 0$. A small Tikhonov regularizer $\epsilon \mathbf{I}$ ($\epsilon = 10^{-6}$) is added to the diagonal before eigenvalue decomposition, ensuring strictly positive eigenvalues and well-conditioned covariance ellipses.
 
 ---
 
@@ -208,7 +208,7 @@ flowchart TD
 > $$c(u, v) = \Delta t \cdot \left(1.0 + \lambda_{\text{head}} \cdot \max\left(0, -\frac{\mathbf{V}_{\text{current}} \cdot \hat{\mathbf{u}}}{V_s}\right)^2\right)$$
 > The quadratic head-current penalty factor $\lambda_{\text{head}} \ge 0$ reflects cubic hydrodynamic hull drag ($P \propto V^3$), incentivizing vessels sailing northbound against the $2.5\text{ m/s}$ current to hug the shallower coastal waters where currents are weakest.
 
-### Q15: Is your A* heuristic admissible and consistent, and does it guarantee the optimal path?
+### Q15: Is your A* heuristic admissible and consistent, and how does it find the minimum-cost path?
 > **Answer**:
 > The heuristic function $h(n)$ estimates the remaining cost from current node $n$ to the goal node $g$.
 > For travel time under variable current, the maximum possible ground speed is:
@@ -218,7 +218,7 @@ flowchart TD
 > 1. **Admissibility**: Because no vessel can travel faster than $V_{\max}^{\text{ground}}$, $h(n) \le h^*(n)$ for all nodes $n$. The heuristic never overestimates the true remaining cost.
 > 2. **Consistency (Monotonicity)**: By the triangle inequality, for any neighbor $m$:
 >    $$h(n) \le c(n, m) + h(m)$$
-> Since $h(n)$ is admissible and consistent, A* is mathematically guaranteed to find the globally optimal, minimum-cost passage plan without requiring node re-openings.
+> Since $h(n)$ is admissible and consistent on the discretized grid, A* finds the minimum-cost passage plan on the 8-connected grid graph without requiring node re-openings.
 
 ### Q16: How does the path smoother eliminate 8-directional raster staircasing?
 > **Answer**:
@@ -270,11 +270,11 @@ flowchart TD
 
 ### Q21: Why does `SimulationStateManager` use an explicit `threading.Lock()`?
 > **Answer**:
-> Because CPU-bound endpoints execute concurrently across AnyIO worker threads, multiple client requests (e.g., simultaneous forward swarms and chart generation calls) can access and mutate server state simultaneously. Without synchronization, concurrent mutations to `self.latest_forward` or `self.latest_route` would cause race conditions, torn reads, or stale memory references. A mutual exclusion lock (`with self._lock:`) guarantees atomic state transitions across all worker threads.
+> Because CPU-bound endpoints execute concurrently across AnyIO worker threads, multiple client requests (e.g., simultaneous forward swarms and chart generation calls) can access and mutate server state simultaneously. Without synchronization, concurrent mutations to `self.latest_forward` or `self.latest_route` would cause race conditions, torn reads, or stale memory references. A mutual exclusion lock (`with self._lock:`) synchronizes state updates across worker threads.
 
 ### Q22: How does the application prevent magic numbers and unhandled 500 server crashes?
 > **Answer**:
-> 1. **Zero Magic Numbers**: All physical parameters, geographic bounds, time intervals, default speeds, and colors are centralized as typed `Final` constants in [`core/constants.py`](../core/constants.py).
+> 1. **Centralized Constants**: Key physical parameters, geographic bounds, time intervals, default speeds, and colors are centralized as typed `Final` constants in [`core/constants.py`](../core/constants.py).
 > 2. **Pydantic v2 Schema Validation**: Request models enforce strict field boundaries (`ge` and `le`) at the ASGI layer, immediately returning HTTP 422 Unprocessable Entity for invalid parameters before any domain logic executes.
 > 3. **Custom Exception Hierarchy**: Domain violations raise explicit exceptions (`LandCollisionError`, `GridBoundsError`, `RouteNotFoundError`, `WeatherAPIError`) derived from `BogazSimError`. Custom FastAPI exception handlers map each domain exception to semantic HTTP status codes (400, 404, 422, 502) with structured JSON error details, preventing unhandled 500 server errors.
 
@@ -282,7 +282,7 @@ flowchart TD
 > **Answer**:
 > 1. **Mock Weather Injection**: Tests inject an in-memory `WeatherAPIClient` configured with synthetic Poyraz/Lodos generators, isolating tests from external network latency or DNS failures.
 > 2. **In-Memory ASGI Dispatcher (`_ASGITestClient`)**: When `httpx` is unavailable, the test suite falls back to a zero-dependency in-memory ASGI client that packages requests as ASGI scope dictionaries and dispatches them directly through FastAPI's application pipeline.
-> 3. **Lazy Singletons**: Heavy data objects (`VectorGrid`, `MaritimeVisualizer`) are instantiated once and shared across tests rather than re-allocated on every test case. All 104 unit tests execute in **3.25 seconds**.
+> 3. **Lazy Singletons**: Heavy data objects (`VectorGrid`, `MaritimeVisualizer`) are instantiated once and shared across tests rather than re-allocated on every test case. The test suite executes offline with isolated mocks and in-memory clients.
 
 ---
 

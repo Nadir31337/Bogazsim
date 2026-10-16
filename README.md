@@ -5,13 +5,13 @@
 [![Tests](https://img.shields.io/badge/Tests-104%20Passing%20(3.25s)-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-Academic%20Capstone-lightgrey.svg)]()
 
-**BoğazSim** is an interactive maritime simulation environment and mission-control digital twin for the Istanbul Strait (Bosphorus). Developed as a university senior capstone project for SEN4015 (Advanced Programming with Python), it combines computational hydrodynamics, Lagrangian stochastic particle tracking for Search and Rescue (SAR), backward-in-time datum backtracking, and optimal vessel passage planning through one of the world's most congested and navigationally challenging maritime chokepoints.
+**BoğazSim** is an interactive maritime simulation environment and mission-control digital twin for the Istanbul Strait (Bosphorus). Developed as a university senior capstone project for SEN4015 (Advanced Programming with Python), it combines computational hydrodynamics, Lagrangian stochastic particle tracking for Search and Rescue (SAR), backward-in-time datum backtracking, and vessel passage planning through one of the world's most congested and navigationally challenging maritime chokepoints.
 
 ![BoğazSim Interactive Maritime Dashboard](docs/images/dashboard.png)
 *Interactive mission-control digital twin displaying live Open-Meteo wind vectors, coastal district telemetry badges, and the Bosphorus Strait navigation channel.*
 
 ![BoğazSim Demonstration Animation](docs/images/demo.gif)
-*Animated demonstration: switching between live monitoring, Monte Carlo forward particle swarms, reverse datum backtracking with 95% confidence ellipses, and optimal A\* vessel routing.*
+*Animated demonstration: switching between live monitoring, Monte Carlo forward particle swarms, reverse datum backtracking with 95% confidence ellipses, and A\* vessel routing.*
 
 ---
 
@@ -20,7 +20,7 @@
 - **Hydrodynamic Vector Grid**: $120 \times 160$ discrete cell spatial model capturing two-layer stratified currents, Rumeli Hisarı Venturi constriction acceleration, and localized coastal counter-eddies (*Girdaplar*) with continuous 2D bilinear interpolation.
 - **Monte Carlo Lagrangian Swarm Tracking**: Second-order Runge-Kutta (RK2 Midpoint) and Euler integrators modeling leeway drift deflection, Coriolis rotation, Brownian turbulent diffusion, and Fay gravity-viscous oil slick spreading.
 - **Reverse Datum Backtracking ($- \Delta t$)**: Inverts time integration backward from last-known sightings to estimate candidate origin zones, bounded by analytical $95\%$ bivariate confidence dispersion ellipses.
-- **Continuous Collision Detection (CCD)**: OpenStreetMap polygon boundaries paired with a uniform spatial hash grid index guarantee that particle trajectories and routes remain in navigable water.
+- **Continuous Collision Detection (CCD)**: OpenStreetMap polygon boundaries paired with a uniform spatial hash grid index constrain simulated particle trajectories and routes to navigable water.
 - **Weighted A\* Vessel Route Optimization**: Graph navigation on a Moore 8-neighborhood that optimizes vessel Speed Over Ground (SOG) and balances head-current fuel penalties ($\lambda_{\text{head}}$), smoothed via line-of-sight raycasting.
 - **FastAPI REST Application**: Asynchronous service with 10 REST endpoints, Pydantic v2 schemas, background thread workers, and thread-safe simulation state locking.
 - **Interactive Maritime Digital Twin**: Single-page Leaflet and HTML5 Canvas interface featuring live Open-Meteo weather polling, synthetic fallback generators, and publication figure generation.
