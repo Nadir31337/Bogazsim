@@ -984,7 +984,7 @@ async function handleForwardSubmit(e) {
     }
     state.currentSim = await res.json();
     state.maxSteps = state.currentSim.trajectories && state.currentSim.trajectories[0] ? state.currentSim.trajectories[0].length : 100;
-    state.animationStep = 0;
+    state.animationStep = new URLSearchParams(window.location.search).has('autorun') ? state.maxSteps : 0;
     state.animating = true;
     updateTelemetryCard(state.currentSim, 'forward');
   } catch (err) {
@@ -1042,7 +1042,7 @@ async function handleReverseSubmit(e) {
     }
     state.currentSim = await res.json();
     state.maxSteps = state.currentSim.trajectories && state.currentSim.trajectories[0] ? state.currentSim.trajectories[0].length : 100;
-    state.animationStep = 0;
+    state.animationStep = new URLSearchParams(window.location.search).has('autorun') ? state.maxSteps : 0;
     state.animating = true;
     updateTelemetryCard(state.currentSim, 'reverse');
   } catch (err) {
@@ -1277,4 +1277,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Start 60 FPS Rendering Loop
   requestAnimationFrame(animate);
+
+  // Autorun hook for automated demo capture
+  const urlParams = new URLSearchParams(window.location.search);
+  const autorun = urlParams.get('autorun');
+  if (autorun === 'forward') {
+    setTimeout(() => {
+      document.getElementById('btn-submit-forward')?.click();
+    }, 1200);
+  } else if (autorun === 'reverse') {
+    setTimeout(() => {
+      switchTab('reverse');
+      setTimeout(() => {
+        document.getElementById('btn-submit-reverse')?.click();
+      }, 400);
+    }, 1200);
+  } else if (autorun === 'route') {
+    setTimeout(() => {
+      switchTab('route');
+      setTimeout(() => {
+        document.getElementById('btn-submit-route')?.click();
+      }, 400);
+    }, 1200);
+  }
 });
