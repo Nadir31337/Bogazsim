@@ -8,9 +8,13 @@ using deterministic parameters and mocked dependencies where applicable.
 from __future__ import annotations
 
 import math
+import os
 from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+os.environ.setdefault("MPLBACKEND", "Agg")
 
 try:
     import pytest
@@ -1826,9 +1830,9 @@ class TestFastAPIEndpoints(unittest.TestCase):
         """# RUBRIC: Hand-Written Algorithms - Happy Path: Weighted A* optimal passage planner."""
         payload = {
             "start_lat": 41.010,
-            "start_lon": 29.0265,
+            "start_lon": 28.997,
             "end_lat": 41.040,
-            "end_lon": 29.0539,
+            "end_lon": 29.020,
             "vessel_speed_knots": 12.0,
             "head_current_penalty": 1.5,
         }
@@ -1973,9 +1977,9 @@ class TestFastAPIEndpoints(unittest.TestCase):
         """# RUBRIC: Dark-Themed Matplotlib/Seaborn Engine - Happy Path: Route performance profile."""
         route_payload = {
             "start_lat": 41.010,
-            "start_lon": 29.0265,
+            "start_lon": 28.997,
             "end_lat": 41.040,
-            "end_lon": 29.0539,
+            "end_lon": 29.020,
             "vessel_speed_knots": 12.0,
         }
         self.client.post("/api/route", json=route_payload)

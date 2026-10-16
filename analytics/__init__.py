@@ -7,7 +7,6 @@ and dark-themed Matplotlib/Seaborn visualization generation.
 from __future__ import annotations
 
 from analytics.data_processor import SimulationDataProcessor
-from analytics.visualizer import MaritimeVisualizer
 
 __all__ = [
     "MaritimeVisualizer",
@@ -15,3 +14,11 @@ __all__ = [
 ]
 
 __version__ = "1.0.0"
+
+
+def __getattr__(name: str) -> Any:
+    if name == "MaritimeVisualizer":
+        from analytics.visualizer import MaritimeVisualizer
+        return MaritimeVisualizer
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+

@@ -118,16 +118,24 @@ class ForwardSwarmSimulator:
         rng = random.Random(seed)
         total_steps = int((hours * 3600.0) / dt)
 
+        # Snap origin to navigable water if starting on land
+        if self.grid.is_land(origin_lat, origin_lon):
+            origin_lat, origin_lon = self.grid.snap_to_water(origin_lat, origin_lon)
+
         # Instantiate N independent particles with slight spatial perturbation
         particles: list[DriftEntity] = []
         for _ in range(num_particles):
             # Small initial positioning jitter (~15 meters)
             dlat_0 = rng.gauss(0.0, 0.00015)
             dlon_0 = rng.gauss(0.0, 0.00015)
+            p_lat = origin_lat + dlat_0
+            p_lon = origin_lon + dlon_0
+            if self.grid.is_land(p_lat, p_lon):
+                p_lat, p_lon = self.grid.snap_to_water(p_lat, p_lon)
             p = create_entity(
                 entity_type,
-                origin_lat + dlat_0,
-                origin_lon + dlon_0,
+                p_lat,
+                p_lon,
                 spill_volume_m3=spill_volume_m3,
             )
             particles.append(p)

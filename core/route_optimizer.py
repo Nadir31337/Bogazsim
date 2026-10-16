@@ -376,6 +376,16 @@ class WeightedAStarRouter:
         )
         edge_cost_sec = travel_time_sec + head_penalty_sec
 
+        # Coastal fairway safety clearance: prevent hugging rocky coastlines & piers
+        mid_lat = 0.5 * (lat1 + lat2)
+        mid_lon = 0.5 * (lon1 + lon2)
+        if self.grid.rows >= GRID_ROWS and hasattr(self.grid, "get_west_shore_lon"):
+            w_lon = self.grid.get_west_shore_lon(mid_lat)
+            e_lon = self.grid.get_east_shore_lon(mid_lat)
+            dist_to_shore = min(mid_lon - w_lon, e_lon - mid_lon) * METERS_PER_DEGREE_LON
+            if dist_to_shore < 250.0:
+                edge_cost_sec += ((250.0 - dist_to_shore) / 20.0) ** 2
+
         return edge_cost_sec, travel_time_sec, v_ground, dist_m
 
     def find_route(

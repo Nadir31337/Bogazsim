@@ -251,36 +251,78 @@ class VectorGrid:
     # -----------------------------------------------------------------------
     # Strait Morphology & Hydrodynamics Initialization
     # -----------------------------------------------------------------------
-    # Authentic Bosphorus GIS navigation corridor: (lat, centerline_lon, width_meters)
-    # Calibrated to real shoreline contours, bays (Tarabya, İstinye, Bebek), and headlands
-    CENTERLINE_WAYPOINTS: list[tuple[float, float, float]] = [
-        (40.9750, 28.9850, 4800.0),  # Marmara South Anchorage
-        (40.9950, 29.0100, 4200.0),  # Ahırkapı / Kadıköy outer approach
-        (41.0180, 29.0060, 3600.0),  # Sarayburnu / Salacak (Historic Peninsula)
-        (41.0250, 29.0120, 3200.0),  # Karaköy / Kız Kulesi
-        (41.0400, 29.0260, 2400.0),  # Beşiktaş / Üsküdar
-        (41.0448, 29.0335, 1800.0),  # 15 Temmuz Şehitler Bridge
-        (41.0530, 29.0390, 1600.0),  # Ortaköy / Çengelköy
-        (41.0620, 29.0430, 1400.0),  # Kuruçeşme / Vaniköy
-        (41.0720, 29.0480, 1100.0),  # Arnavutköy / Kandilli (Akıntı Burnu)
-        (41.0800, 29.0500, 950.0),   # Bebek Bay / Aşiyan
-        (41.0855, 29.0555, 760.0),   # Rumeli Hisarı / Anadolu Hisarı (The Narrows throat)
-        (41.0912, 29.0620, 1050.0),  # Fatih Sultan Mehmet Bridge
-        (41.0990, 29.0630, 1300.0),  # Baltalimanı / Kanlıca
-        (41.1100, 29.0640, 1800.0),  # Emirgan / Çubuklu
-        (41.1180, 29.0690, 2600.0),  # İstinye Bay / Paşabahçe
-        (41.1250, 29.0760, 2400.0),  # Yeniköy / Paşabahçe north
-        (41.1380, 29.0680, 4200.0),  # Tarabya Bay / Beykoz
-        (41.1480, 29.0580, 3200.0),  # Kireçburnu / Umuryeri
-        (41.1560, 29.0520, 2800.0),  # Kefeliköy / Umuryeri north
-        (41.1640, 29.0530, 3400.0),  # Büyükdere Bay
-        (41.1730, 29.0600, 2800.0),  # Sarıyer / Yuşa Tepesi
-        (41.1850, 29.0850, 2500.0),  # Rumeli Kavağı / Anadolu Kavağı
-        (41.1960, 29.1020, 2700.0),  # Altınkum / Mezar Burnu
-        (41.2030, 29.1180, 2900.0),  # Yavuz Sultan Selim Bridge
-        (41.2250, 29.1220, 4200.0),  # Rumelifeneri / Poyrazköy
-        (41.2480, 29.1250, 5500.0),  # Black Sea North Entrance
+    # Authentic Bosphorus GIS Coastlines: (lat, west_shore_lon, east_shore_lon)
+    # Calibrated to real European (Thrace) and Asian (Anatolia) shoreline contours
+    COASTLINE_WAYPOINTS: list[tuple[float, float, float]] = [
+        (40.9700, 28.9400, 29.0350),  # Marmara South Open
+        (40.9850, 28.9650, 29.0250),  # Ahırkapı / Kadıköy Outer
+        (40.9950, 28.9830, 29.0200),  # Ahırkapı / Haydarpaşa
+        (41.0100, 28.9840, 29.0110),  # Sarayburnu South / Harem
+        (41.0180, 28.9870, 29.0065),  # Sarayburnu Tip / Salacak
+        (41.0250, 28.9800, 29.0120),  # Karaköy / Kız Kulesi / Üsküdar Shore
+        (41.0330, 28.9950, 29.0250),  # Kabataş / Kuzguncuk
+        (41.0410, 29.0080, 29.0380),  # Beşiktaş / Beylerbeyi South
+        (41.0450, 29.0270, 29.0430),  # Ortaköy / 15 Temmuz Bridge / Beylerbeyi
+        (41.0500, 29.0300, 29.0480),  # Ortaköy / Beylerbeyi North
+        (41.0580, 29.0340, 29.0520),  # Kuruçeşme / Çengelköy
+        (41.0660, 29.0410, 29.0580),  # Arnavutköy / Vaniköy
+        (41.0730, 29.0445, 29.0620),  # Akıntı Burnu / Kandilli
+        (41.0800, 29.0440, 29.0620),  # Bebek Bay / Aşiyan / Kandilli North
+        (41.0855, 29.0565, 29.0660),  # Rumeli Hisarı / Anadolu Hisarı (The Narrows)
+        (41.0915, 29.0570, 29.0690),  # FSM Bridge
+        (41.0990, 29.0570, 29.0700),  # Baltalimanı / Kanlıca
+        (41.1100, 29.0575, 29.0780),  # Emirgan / Çubuklu
+        (41.1180, 29.0585, 29.0880),  # İstinye Bay / Paşabahçe
+        (41.1270, 29.0700, 29.0960),  # Yeniköy / Paşabahçe North
+        (41.1380, 29.0600, 29.1000),  # Tarabya Bay / Beykoz
+        (41.1480, 29.0520, 29.0740),  # Kireçburnu / Umuryeri
+        (41.1580, 29.0480, 29.0700),  # Kefeliköy / Umuryeri North
+        (41.1660, 29.0430, 29.0750),  # Büyükdere Bay / Selvi Burnu
+        (41.1750, 29.0520, 29.0860),  # Sarıyer / Yuşa Tepesi
+        (41.1850, 29.0740, 29.0980),  # Rumeli Kavağı / Anadolu Kavağı
+        (41.1960, 29.0940, 29.1140),  # Altınkum / Mezar Burnu
+        (41.2030, 29.1080, 29.1300),  # Garipçe / Poyrazköy (YSS Bridge)
+        (41.2200, 29.1030, 29.1400),  # Rumelifeneri South / Poyrazköy North
+        (41.2350, 29.1080, 29.1480),  # Rumelifeneri / Fil Burnu
+        (41.2500, 29.0850, 29.1650),  # Black Sea North Open Mouth
     ]
+
+    CENTERLINE_WAYPOINTS: list[tuple[float, float, float]] = [
+        (lat, 0.5 * (w + e), (e - w) * METERS_PER_DEGREE_LON)
+        for lat, w, e in COASTLINE_WAYPOINTS
+    ]
+
+    @classmethod
+    def get_west_shore_lon(cls, lat: float) -> float:
+        """Evaluate GIS European (West) coastline longitude at a given latitude."""
+        pts = cls.COASTLINE_WAYPOINTS
+        if lat <= pts[0][0]:
+            return pts[0][1]
+        if lat >= pts[-1][0]:
+            return pts[-1][1]
+        for i in range(len(pts) - 1):
+            lat0, w0, _ = pts[i]
+            lat1, w1, _ = pts[i + 1]
+            if lat0 <= lat <= lat1:
+                ratio = (lat - lat0) / (lat1 - lat0)
+                return w0 + ratio * (w1 - w0)
+        return 29.00
+
+    @classmethod
+    def get_east_shore_lon(cls, lat: float) -> float:
+        """Evaluate GIS Asian (East) coastline longitude at a given latitude."""
+        pts = cls.COASTLINE_WAYPOINTS
+        if lat <= pts[0][0]:
+            return pts[0][2]
+        if lat >= pts[-1][0]:
+            return pts[-1][2]
+        for i in range(len(pts) - 1):
+            lat0, _, e0 = pts[i]
+            lat1, _, e1 = pts[i + 1]
+            if lat0 <= lat <= lat1:
+                ratio = (lat - lat0) / (lat1 - lat0)
+                return e0 + ratio * (e1 - e0)
+        return 29.10
 
     @classmethod
     def get_centerline_lon(cls, lat: float) -> float:
@@ -288,21 +330,10 @@ class VectorGrid:
         
         Physics Note:
         The Bosphorus curves from Marmara (South, lon ~28.98°E) through the
-        Rumeli Hisarı constriction (~41.085°N, 29.055°E), Bebek bight,
-        Tarabya Bay, and opens into the Black Sea (~41.25°N, 29.125°E).
+        Rumeli Hisarı constriction (~41.085°N, 29.056°E), Bebek bight,
+        Tarabya Bay, and opens into the Black Sea (~41.25°N, 29.123°E).
         """
-        pts = cls.CENTERLINE_WAYPOINTS
-        if lat <= pts[0][0]:
-            return pts[0][1]
-        if lat >= pts[-1][0]:
-            return pts[-1][1]
-        for i in range(len(pts) - 1):
-            lat0, lon0, _ = pts[i]
-            lat1, lon1, _ = pts[i + 1]
-            if lat0 <= lat <= lat1:
-                ratio = (lat - lat0) / (lat1 - lat0)
-                return lon0 + ratio * (lon1 - lon0)
-        return 29.055
+        return 0.5 * (cls.get_west_shore_lon(lat) + cls.get_east_shore_lon(lat))
 
     @classmethod
     def get_strait_width_m(cls, lat: float) -> float:
@@ -312,64 +343,84 @@ class VectorGrid:
         The strait constricts sharply near Rumeli Hisarı (~760m wide)
         and widens at both the Marmara Sea and Black Sea mouths (>4000m).
         """
-        pts = cls.CENTERLINE_WAYPOINTS
-        if lat <= pts[0][0]:
-            return pts[0][2]
-        if lat >= pts[-1][0]:
-            return pts[-1][2]
-        for i in range(len(pts) - 1):
-            lat0, _, w0 = pts[i]
-            lat1, _, w1 = pts[i + 1]
-            if lat0 <= lat <= lat1:
-                ratio = (lat - lat0) / (lat1 - lat0)
-                return w0 + ratio * (w1 - w0)
-        return 2000.0
+        w = cls.get_west_shore_lon(lat)
+        e = cls.get_east_shore_lon(lat)
+        return max(MIN_STRAIT_WIDTH_M, (e - w) * METERS_PER_DEGREE_LON)
+
+    def snap_to_water(self, lat: float, lon: float) -> tuple[float, float]:
+        """Snap a terrestrial or boundary datum to the nearest navigable water coordinate.
+        
+        Physics Note:
+        When a click or debris datum lands on dry land (e.g. city streets),
+        this snaps coordinates into the adjacent Bosphorus navigation channel.
+        """
+        clamped_lat = max(LAT_MIN + 0.001, min(LAT_MAX - 0.001, lat))
+        w = self.get_west_shore_lon(clamped_lat)
+        e = self.get_east_shore_lon(clamped_lat)
+        margin_deg = 80.0 / METERS_PER_DEGREE_LON
+        if lon < w:
+            snapped_lon = min(0.5 * (w + e), w + margin_deg)
+        elif lon > e:
+            snapped_lon = max(0.5 * (w + e), e - margin_deg)
+        else:
+            snapped_lon = lon
+        return clamped_lat, snapped_lon
 
     def _build_strait_hydrodynamics(self) -> None:
         """Populate cell matrix with land masks, two-layer velocity, and eddies."""
         for r in range(self._rows):
             lat, _ = self.indices_to_lat_lon(r, 0)
-            center_lon = self.get_centerline_lon(lat)
-            half_width_m = self.get_strait_width_m(lat) / 2.0
-            
+            west_lon = self.get_west_shore_lon(lat)
+            east_lon = self.get_east_shore_lon(lat)
+            channel_width_m = (east_lon - west_lon) * METERS_PER_DEGREE_LON
+
             # Venturi effect: Speed is inversely proportional to cross-section width
-            throat_ratio = min(1.0, MIN_STRAIT_WIDTH_M / (half_width_m * 2.0))
-            surface_speed = MIN_SURFACE_CURRENT_MS + (
+            throat_ratio = min(1.0, MIN_STRAIT_WIDTH_M / max(MIN_STRAIT_WIDTH_M, channel_width_m))
+            center_speed = MIN_SURFACE_CURRENT_MS + (
                 MAX_SURFACE_CURRENT_MS - MIN_SURFACE_CURRENT_MS
             ) * throat_ratio
 
-            # Sample channel tangent direction for realistic hydrodynamic flow
-            dlat_sample = 0.002
-            dlon_sample = (
-                self.get_centerline_lon(lat + dlat_sample) - self.get_centerline_lon(lat - dlat_sample)
-            )
-            dx_m = dlon_sample * METERS_PER_DEGREE_LON
-            dy_m = (2.0 * dlat_sample) * METERS_PER_DEGREE_LAT
-            flow_len = math.hypot(dx_m, dy_m)
-            # Southward flow direction (negative dy_m toward Marmara)
-            tangent_u = -(dx_m / flow_len) if flow_len > 0 else 0.0
-            tangent_v = -(dy_m / flow_len) if flow_len > 0 else -1.0
+            # Sample channel tangent direction along local streamlines
+            dlat_sample = 0.005
+            w_plus = self.get_west_shore_lon(lat + dlat_sample)
+            e_plus = self.get_east_shore_lon(lat + dlat_sample)
+            w_minus = self.get_west_shore_lon(lat - dlat_sample)
+            e_minus = self.get_east_shore_lon(lat - dlat_sample)
 
             for c in range(self._cols):
                 _, lon = self.indices_to_lat_lon(0, c)
-                dx_meters = (lon - center_lon) * METERS_PER_DEGREE_LON
-                dist_m = abs(dx_meters)
-
                 cell = self._cells[r][c]
-                if dist_m > half_width_m:
+
+                if lon <= west_lon or lon >= east_lon:
                     cell.is_land = True
                     cell.depth = 0.0
                     cell.u = 0.0
                     cell.v = 0.0
                 else:
                     cell.is_land = False
+                    alpha = (lon - west_lon) / max(1e-6, east_lon - west_lon)
+
+                    # Streamline points upstream (North) and downstream (South)
+                    lon_plus = (1.0 - alpha) * w_plus + alpha * e_plus
+                    lon_minus = (1.0 - alpha) * w_minus + alpha * e_minus
+                    dlon = lon_minus - lon_plus
+                    dx_m = dlon * METERS_PER_DEGREE_LON
+                    dy_m = (-2.0 * dlat_sample) * METERS_PER_DEGREE_LAT
+                    flow_len = math.hypot(dx_m, dy_m)
+
+                    tangent_u = (dx_m / flow_len) if flow_len > 0 else 0.0
+                    tangent_v = (dy_m / flow_len) if flow_len > 0 else -1.0
+
+                    # Parabolic transverse velocity profile across channel
+                    transverse_factor = 0.50 + 0.50 * (4.0 * alpha * (1.0 - alpha))
+                    surf_speed = center_speed * transverse_factor
+
                     # Bathymetric profile: Parabolic cross-section deepening toward center
-                    depth_fraction = 1.0 - (dist_m / half_width_m) ** 2
+                    depth_fraction = 4.0 * alpha * (1.0 - alpha)
                     cell.depth = max(10.0, AVERAGE_STRAIT_DEPTH_M * depth_fraction)
-                    
-                    # Upper layer: Southward flow following authentic channel curvature
-                    cell.u = surface_speed * tangent_u
-                    cell.v = surface_speed * tangent_v
+
+                    cell.u = surf_speed * tangent_u
+                    cell.v = surf_speed * tangent_v
 
         self._apply_counter_eddies()
 
@@ -407,6 +458,7 @@ class VectorGrid:
     def is_land(self, lat: float, lon: float) -> bool:
         """Check if coordinates fall on dry land or outside navigable domain.
         
+        # RUBRIC: Encapsulation
         Args:
             lat: Latitude coordinate.
             lon: Longitude coordinate.
@@ -416,10 +468,15 @@ class VectorGrid:
         """
         if not (LAT_MIN <= lat <= LAT_MAX and LON_MIN <= lon <= LON_MAX):
             return True
+        if self._rows == GRID_ROWS and self._cols == GRID_COLS:
+            west = self.get_west_shore_lon(lat)
+            east = self.get_east_shore_lon(lat)
+            if lon <= west or lon >= east:
+                return True
         r, c = self.lat_lon_to_indices(lat, lon)
         r_idx = min(self._rows - 1, max(0, int(round(r))))
         c_idx = min(self._cols - 1, max(0, int(round(c))))
-        return self._cells[r_idx][c_idx].is_land
+        return bool(self._cells[r_idx][c_idx].is_land)
 
     def get_depth(self, lat: float, lon: float) -> float:
         """Retrieve bilinearly interpolated water column depth in meters."""

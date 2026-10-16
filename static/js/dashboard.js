@@ -13,7 +13,7 @@ const LAT_MAX = 41.25;
 const LON_MIN = 28.95;
 const LON_MAX = 29.20;
 const CONSTRICTION_LAT = 41.085;
-const CONSTRICTION_LON = 29.0786;
+const CONSTRICTION_LON = 29.0565;
 
 // Application State
 const state = {
@@ -22,28 +22,24 @@ const state = {
   ctx: null,
   grid: null,
   weather: {
-    speed_ms: 8.1,
-    speed_kmh: 29.0,
-    speed_knots: 15.7,
-    direction_deg: 354.0,
-    u_wind: 0.85,
-    v_wind: -8.05,
+    speed_ms: 4.2,
+    speed_kmh: 15.0,
+    speed_knots: 8.2,
+    direction_deg: 350.0,
+    u_wind: 0.73,
+    v_wind: -4.14,
     sector_name: 'Yıldız',
-    sector_description: 'North (N) — Cold Black Sea flow',
-    speed_category: 'Fresh Breeze',
-    surface_pressure_hpa: 1019.6,
-    temperature_c: 14.4,
+    sector_description: 'North (N) — Cold Black Sea maritime flow',
+    speed_category: 'Gentle Breeze',
+    surface_pressure_hpa: 1017.5,
+    temperature_c: 15.0,
     source: 'live',
   },
   layers: {
     windFlow: true,
     districts: true,
-    bridges: true,
-    tss: true,
   },
   mapMarkers: [],
-  bridgeLayers: [],
-  tssLayers: [],
   targetMarker: null,
   currentSim: null,
   currentRoute: null,
@@ -57,135 +53,145 @@ const state = {
 /**
  * Clean Coastal Bosphorus Maritime Stations matching Zoom Earth layout.
  * Accurately spans the Bosphorus Strait from Black Sea entrance to Marmara Sea.
+ * Features authentic hydrodynamic exposure factors and topographical channel azimuths.
  */
 const BOSPHORUS_STATIONS = [
-  // --- North Entrance / Black Sea ---
-  { name: 'Rumelifeneri', lat: 41.240, lon: 29.098, baseSpeedKmh: 24 },
-  { name: 'Poyrazköy', lat: 41.210, lon: 29.135, baseSpeedKmh: 23 },
-  { name: 'Kilyos', lat: 41.248, lon: 29.030, baseSpeedKmh: 25 },
-  { name: 'Riva', lat: 41.225, lon: 29.225, baseSpeedKmh: 24 },
+  // --- North Entrance / Black Sea (Direct open marine exposure) ---
+  { name: 'Rumelifeneri', lat: 41.240, lon: 29.098, exposure: 1.10, channelAzimuth: 355 },
+  { name: 'Poyrazköy', lat: 41.210, lon: 29.135, exposure: 1.08, channelAzimuth: 015 },
+  { name: 'Kilyos', lat: 41.248, lon: 29.030, exposure: 1.14, channelAzimuth: 345 },
+  { name: 'Riva', lat: 41.225, lon: 29.225, exposure: 1.12, channelAzimuth: 025 },
 
-  // --- Upper Bosphorus (North of FSM Bridge) ---
-  { name: 'Sarıyer', lat: 41.170, lon: 29.048, baseSpeedKmh: 20 },
-  { name: 'Beykoz', lat: 41.135, lon: 29.110, baseSpeedKmh: 18 },
-  { name: 'Tarabya', lat: 41.140, lon: 29.045, baseSpeedKmh: 19 },
-  { name: 'Paşabahçe', lat: 41.115, lon: 29.102, baseSpeedKmh: 18 },
+  // --- Upper Bosphorus (Channeled valley flow) ---
+  { name: 'Sarıyer', lat: 41.170, lon: 29.048, exposure: 1.02, channelAzimuth: 020 },
+  { name: 'Beykoz', lat: 41.135, lon: 29.110, exposure: 0.98, channelAzimuth: 025 },
+  { name: 'Tarabya', lat: 41.140, lon: 29.045, exposure: 1.00, channelAzimuth: 020 },
+  { name: 'Paşabahçe', lat: 41.115, lon: 29.102, exposure: 0.98, channelAzimuth: 030 },
 
-  // --- The Narrows (700m Constriction - Highest Maritime Hazard) ---
-  { name: 'Rumeli Hisarı', lat: 41.085, lon: 29.048, baseSpeedKmh: 18, isNarrows: true },
-  { name: 'Kandilli', lat: 41.076, lon: 29.070, baseSpeedKmh: 17, isNarrows: true },
+  // --- The Narrows (700m Constriction - Venturi acceleration & sharp bend) ---
+  { name: 'Rumeli Hisarı', lat: 41.085, lon: 29.048, exposure: 1.18, channelAzimuth: 035, isNarrows: true },
+  { name: 'Kandilli', lat: 41.076, lon: 29.070, exposure: 1.16, channelAzimuth: 035, isNarrows: true },
 
-  // --- Lower Bosphorus (Between Bridges & Historic Peninsula) ---
-  { name: 'Ortaköy', lat: 41.050, lon: 29.020, baseSpeedKmh: 16 },
-  { name: 'Beşiktaş', lat: 41.042, lon: 28.995, baseSpeedKmh: 15 },
-  { name: 'Üsküdar', lat: 41.026, lon: 29.022, baseSpeedKmh: 15 },
-  { name: 'Kız Kulesi', lat: 41.021, lon: 29.004, baseSpeedKmh: 16, isWater: true },
+  // --- Lower Bosphorus (Transition reach) ---
+  { name: 'Ortaköy', lat: 41.050, lon: 29.020, exposure: 0.98, channelAzimuth: 030 },
+  { name: 'Beşiktaş', lat: 41.042, lon: 28.995, exposure: 0.95, channelAzimuth: 030 },
+  { name: 'Üsküdar', lat: 41.026, lon: 29.022, exposure: 0.96, channelAzimuth: 030 },
+  { name: 'Kız Kulesi', lat: 41.021, lon: 29.004, exposure: 1.04, channelAzimuth: 030, isWater: true },
 
   // --- South Entrance / Marmara Sea ---
-  { name: 'Karaköy', lat: 41.022, lon: 28.974, baseSpeedKmh: 16 },
-  { name: 'Kadıköy', lat: 40.990, lon: 29.030, baseSpeedKmh: 17 },
-  { name: 'Bakırköy', lat: 40.975, lon: 28.875, baseSpeedKmh: 18 },
-  { name: 'Bostancı', lat: 40.955, lon: 29.100, baseSpeedKmh: 17 },
+  { name: 'Karaköy', lat: 41.022, lon: 28.974, exposure: 0.95, channelAzimuth: 035 },
+  { name: 'Kadıköy', lat: 40.990, lon: 29.030, exposure: 1.02, channelAzimuth: 040 },
+  { name: 'Bakırköy', lat: 40.975, lon: 28.875, exposure: 1.05, channelAzimuth: 045 },
+  { name: 'Bostancı', lat: 40.955, lon: 29.100, exposure: 1.02, channelAzimuth: 045 },
 ];
 
 /**
- * 3 Iconic Suspension Bridges
+ * Authentic Bosphorus Shoreline Model & Water Constraints
  */
-const BOSPHORUS_BRIDGES = [
-  {
-    name: 'Yavuz Sultan Selim Köprüsü (3. Köprü)',
-    coords: [[41.2052, 29.1090], [41.2012, 29.1275]], // Garipçe (NW) to Poyrazköy (SE)
-    color: '#f59e0b',
-  },
-  {
-    name: 'Fatih Sultan Mehmet Köprüsü (FSM / 2. Köprü)',
-    coords: [[41.0915, 29.0560], [41.0910, 29.0685]], // Hisarüstü (W) to Kavacık (E)
-    color: '#38bdf8',
-  },
-  {
-    name: '15 Temmuz Şehitler Köprüsü (1. Köprü)',
-    coords: [[41.0455, 29.0275], [41.0435, 29.0395]], // Ortaköy (W) to Beylerbeyi (E)
-    color: '#34d399',
-  },
+const BOSPHORUS_COASTLINE = [
+  [40.9700, 28.9400, 29.0350],  // Marmara South Open
+  [40.9850, 28.9650, 29.0250],  // Ahırkapı / Kadıköy Outer
+  [40.9950, 28.9830, 29.0200],  // Ahırkapı / Haydarpaşa
+  [41.0100, 28.9840, 29.0110],  // Sarayburnu South / Harem
+  [41.0180, 28.9870, 29.0065],  // Sarayburnu Tip / Salacak
+  [41.0250, 28.9800, 29.0120],  // Karaköy / Kız Kulesi / Üsküdar Shore
+  [41.0330, 28.9950, 29.0250],  // Kabataş / Kuzguncuk
+  [41.0410, 29.0080, 29.0380],  // Beşiktaş / Beylerbeyi South
+  [41.0450, 29.0270, 29.0430],  // Ortaköy / 15 Temmuz Bridge / Beylerbeyi
+  [41.0500, 29.0300, 29.0480],  // Ortaköy / Beylerbeyi North
+  [41.0580, 29.0340, 29.0520],  // Kuruçeşme / Çengelköy
+  [41.0660, 29.0410, 29.0580],  // Arnavutköy / Vaniköy
+  [41.0730, 29.0445, 29.0620],  // Akıntı Burnu / Kandilli
+  [41.0800, 29.0440, 29.0620],  // Bebek Bay / Aşiyan / Kandilli North
+  [41.0855, 29.0565, 29.0660],  // Rumeli Hisarı / Anadolu Hisarı (The Narrows)
+  [41.0915, 29.0570, 29.0690],  // FSM Bridge
+  [41.0990, 29.0570, 29.0700],  // Baltalimanı / Kanlıca
+  [41.1100, 29.0575, 29.0780],  // Emirgan / Çubuklu
+  [41.1180, 29.0585, 29.0880],  // İstinye Bay / Paşabahçe
+  [41.1270, 29.0700, 29.0960],  // Yeniköy / Paşabahçe North
+  [41.1380, 29.0600, 29.1000],  // Tarabya Bay / Beykoz
+  [41.1480, 29.0520, 29.0740],  // Kireçburnu / Umuryeri
+  [41.1580, 29.0480, 29.0700],  // Kefeliköy / Umuryeri North
+  [41.1660, 29.0430, 29.0750],  // Büyükdere Bay / Selvi Burnu
+  [41.1750, 29.0520, 29.0860],  // Sarıyer / Yuşa Tepesi
+  [41.1850, 29.0740, 29.0980],  // Rumeli Kavağı / Anadolu Kavağı
+  [41.1960, 29.0940, 29.1140],  // Altınkum / Mezar Burnu
+  [41.2030, 29.1080, 29.1300],  // Garipçe / Poyrazköy (YSS Bridge)
+  [41.2200, 29.1030, 29.1400],  // Rumelifeneri South / Poyrazköy North
+  [41.2350, 29.1080, 29.1480],  // Rumelifeneri / Fil Burnu
+  [41.2500, 29.0850, 29.1650],  // Black Sea North Open Mouth
 ];
+
+function getBosphorusShores(lat) {
+  const pts = BOSPHORUS_COASTLINE;
+  if (lat <= pts[0][0]) return { west: pts[0][1], east: pts[0][2] };
+  if (lat >= pts[pts.length - 1][0]) return { west: pts[pts.length - 1][1], east: pts[pts.length - 1][2] };
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (pts[i][0] <= lat && lat <= pts[i + 1][0]) {
+      const r = (lat - pts[i][0]) / (pts[i + 1][0] - pts[i][0]);
+      return {
+        west: pts[i][1] + r * (pts[i + 1][1] - pts[i][1]),
+        east: pts[i][2] + r * (pts[i + 1][2] - pts[i][2]),
+      };
+    }
+  }
+  return { west: 29.00, east: 29.08 };
+}
+
+function snapToBosphorusWater(lat, lon) {
+  const clampedLat = Math.max(40.985, Math.min(41.245, lat));
+  const shores = getBosphorusShores(clampedLat);
+  const channelWidth = shores.east - shores.west;
+  const margin = Math.max(0.0020, channelWidth * 0.14);
+  let snappedLon = lon;
+  let wasSnapped = false;
+  if (lon < shores.west + margin) {
+    snappedLon = shores.west + margin;
+    wasSnapped = true;
+  } else if (lon > shores.east - margin) {
+    snappedLon = shores.east - margin;
+    wasSnapped = true;
+  }
+  return { lat: clampedLat, lon: snappedLon, wasSnapped };
+}
+
+
 
 /**
- * International TSS Fairways (Authentic 26-Point Bosphorus Channel Geometry)
- * COLREGS-compliant lanes following the curved fairway contours without intersecting land.
- */
-const TSS_NORTHBOUND = [
-  [40.9750, 28.9890], // Marmara Sea South Approach
-  [40.9950, 29.0140], // Kadıköy outer fairway
-  [41.0180, 29.0100], // Salacak
-  [41.0250, 29.0160], // Kız Kulesi offing
-  [41.0400, 29.0300], // Üsküdar
-  [41.0448, 29.0360], // 15 Temmuz Bridge east span
-  [41.0530, 29.0420], // Çengelköy
-  [41.0620, 29.0460], // Vaniköy
-  [41.0720, 29.0510], // Kandilli
-  [41.0800, 29.0530], // Aşiyan offing
-  [41.0855, 29.0580], // Anadolu Hisarı (Narrows)
-  [41.0912, 29.0645], // FSM Bridge east span
-  [41.0990, 29.0665], // Kanlıca
-  [41.1100, 29.0675], // Çubuklu
-  [41.1180, 29.0730], // Paşabahçe
-  [41.1250, 29.0800], // Paşabahçe north
-  [41.1380, 29.0735], // Beykoz
-  [41.1480, 29.0620], // Umuryeri
-  [41.1560, 29.0560], // Umuryeri north
-  [41.1640, 29.0570], // Selvi Burnu
-  [41.1730, 29.0640], // Yuşa Tepesi offing
-  [41.1850, 29.0900], // Anadolu Kavağı
-  [41.1960, 29.1070], // Mezar Burnu
-  [41.2030, 29.1230], // YSS Bridge east span
-  [41.2250, 29.1270], // Poyrazköy
-  [41.2450, 29.1300], // Black Sea North Entrance
-];
-
-const TSS_SOUTHBOUND = [
-  [41.2450, 29.1200], // Black Sea North Entrance
-  [41.2250, 29.1180], // Rumelifeneri offing
-  [41.2030, 29.1130], // YSS Bridge west span
-  [41.1960, 29.0980], // Altınkum
-  [41.1850, 29.0810], // Rumeli Kavağı
-  [41.1730, 29.0570], // Sarıyer offing
-  [41.1640, 29.0510], // Büyükdere
-  [41.1560, 29.0500], // Kefeliköy
-  [41.1480, 29.0550], // Kireçburnu
-  [41.1380, 29.0630], // Tarabya
-  [41.1250, 29.0720], // Yeniköy
-  [41.1180, 29.0660], // İstinye offing
-  [41.1100, 29.0610], // Emirgan
-  [41.0990, 29.0600], // Baltalimanı
-  [41.0912, 29.0595], // FSM Bridge west span
-  [41.0855, 29.0535], // Rumeli Hisarı (Narrows)
-  [41.0800, 29.0480], // Bebek
-  [41.0720, 29.0460], // Akıntı Burnu
-  [41.0620, 29.0410], // Kuruçeşme
-  [41.0530, 29.0370], // Ortaköy
-  [41.0448, 29.0310], // 15 Temmuz Bridge west span
-  [41.0400, 29.0230], // Beşiktaş
-  [41.0250, 29.0090], // Karaköy
-  [41.0180, 29.0030], // Sarayburnu
-  [40.9950, 29.0060], // Ahırkapı
-  [40.9750, 28.9810], // Marmara Sea South Approach
-];
-
-/**
- * Initialize Leaflet Map with High-Performance, Watermark-Free GIS Basemaps
+ * Initialize Leaflet Map Locked to Istanbul Bosphorus
  */
 function initMap() {
   const mapEl = document.getElementById('bosphorus-map');
   if (!mapEl) return;
 
-  // Center on Istanbul Bosphorus with optimal framing
+  // Strict spatial boundaries: Lock viewport strictly to Greater Istanbul & Bosphorus
+  const ISTANBUL_BOUNDS = L.latLngBounds(
+    [40.80, 28.65], // Southwest Istanbul / Sea of Marmara
+    [41.35, 29.40]  // Northeast Istanbul / Black Sea entrance
+  );
+
   state.map = L.map('bosphorus-map', {
     center: [41.115, 29.065],
-    zoom: 11.4,
-    minZoom: 10,
+    zoom: 11.5,
+    minZoom: 11.2,
     maxZoom: 17,
+    maxBounds: ISTANBUL_BOUNDS,
+    maxBoundsViscosity: 1.0, // Hard bounce-back strictly locks navigation to Istanbul
+    worldCopyJump: false,
     zoomControl: true,
     attributionControl: true,
+  });
+
+  // Strict physical lock to Istanbul: prevent any pan or zoom beyond Greater Istanbul
+  state.map.setMaxBounds(ISTANBUL_BOUNDS);
+  state.map.on('drag', () => {
+    state.map.panInsideBounds(ISTANBUL_BOUNDS, { animate: false });
+  });
+  state.map.on('zoomend', () => {
+    if (state.map.getZoom() < 11.2) {
+      state.map.setZoom(11.2);
+    }
+    state.map.panInsideBounds(ISTANBUL_BOUNDS, { animate: false });
   });
 
   // Basemap Tile Layers (Zero Watermark, 100% Free & Fast CDN)
@@ -214,26 +220,27 @@ function initMap() {
   // Populate Clean Coastal District Badges
   renderDistrictBadges();
 
-  // Render Bridges and TSS Lanes
-  renderBridges();
-  renderTSSLanes();
-
-  // Map Click Listener to Set Form Coordinates
+  // Map Click Listener: Strictly Constrains Navigation to Bosphorus Waterway
   state.map.on('click', (e) => {
-    const lat = e.latlng.lat;
-    const lon = e.latlng.lng;
+    let lat = e.latlng.lat;
+    let lon = e.latlng.lng;
+
+    // Automatic snapping to navigable Bosphorus channel
+    const snapped = snapToBosphorusWater(lat, lon);
+    lat = snapped.lat;
+    lon = snapped.lon;
 
     // Place Target Pin
     if (state.targetMarker) state.map.removeLayer(state.targetMarker);
     state.targetMarker = L.circleMarker([lat, lon], {
       radius: 7,
-      color: '#38bdf8',
-      fillColor: '#0284c7',
+      color: snapped.wasSnapped ? '#38bdf8' : '#34d399',
+      fillColor: snapped.wasSnapped ? '#0284c7' : '#059669',
       fillOpacity: 0.9,
       weight: 2,
     }).addTo(state.map);
 
-    // Auto-fill active tab inputs
+    // Auto-fill active tab inputs with valid Bosphorus coordinates
     if (state.activeTab === 'forward') {
       const latInp = document.getElementById('fwd-lat');
       const lonInp = document.getElementById('fwd-lon');
@@ -249,12 +256,31 @@ function initMap() {
       const sLon = document.getElementById('route-start-lon');
       const eLat = document.getElementById('route-end-lat');
       const eLon = document.getElementById('route-end-lon');
-      if (sLat && (!sLat.value || eLat.value)) {
-        sLat.value = lat.toFixed(4);
+
+      if (!state.routeClickTarget || state.routeClickTarget === 'start') {
+        if (sLat) sLat.value = lat.toFixed(4);
         if (sLon) sLon.value = lon.toFixed(4);
-      } else if (eLat) {
-        eLat.value = lat.toFixed(4);
+        state.routeClickTarget = 'end';
+        if (state.departureMarker) state.map.removeLayer(state.departureMarker);
+        state.departureMarker = L.circleMarker([lat, lon], {
+          radius: 7,
+          color: '#38bdf8',
+          fillColor: '#0284c7',
+          fillOpacity: 0.9,
+          weight: 2,
+        }).addTo(state.map).bindTooltip('Departure (A)', { permanent: true, direction: 'top', className: 'bg-slate-900 text-cyan-300 font-mono text-xs' });
+      } else {
+        if (eLat) eLat.value = lat.toFixed(4);
         if (eLon) eLon.value = lon.toFixed(4);
+        state.routeClickTarget = 'start';
+        if (state.destinationMarker) state.map.removeLayer(state.destinationMarker);
+        state.destinationMarker = L.circleMarker([lat, lon], {
+          radius: 7,
+          color: '#f43f5e',
+          fillColor: '#e11d48',
+          fillOpacity: 0.9,
+          weight: 2,
+        }).addTo(state.map).bindTooltip('Destination (B)', { permanent: true, direction: 'top', className: 'bg-slate-900 text-rose-300 font-mono text-xs' });
       }
     }
   });
@@ -321,7 +347,58 @@ function initAnimationCanvas() {
 }
 
 /**
+ * Compute Authentic Local District Wind Vector from Real Open-Meteo Meteorology.
+ * Applies physical strait channeling, Venturi constriction acceleration at Rumeli Hisarı/Kandilli,
+ * and open marine exposure factors to regional ambient wind observations.
+ */
+function getStationWindData(station) {
+  const baseSpd = state.weather?.speed_ms || 4.2;
+  const baseDir = state.weather?.direction_deg || 350.0;
+
+  // Local speed adjustment based on topography & exposure
+  const localSpeedMs = Math.round(baseSpd * (station.exposure || 1.0) * 10) / 10;
+  const localSpeedKmh = Math.max(1, Math.round(localSpeedMs * 3.6));
+
+  // Topographic channeling: interpolate between free ambient wind and strait channel azimuth
+  // For Northerly flow (Yıldız/Poyraz: 290°–070°), wind aligns downstream with channel azimuth
+  // For Southerly flow (Lodos: 140°–250°), wind aligns upstream with channel azimuth + 180°
+  let localDir = baseDir;
+  const ch = station.channelAzimuth || 25;
+
+  const isNortherly = (baseDir >= 290 || baseDir <= 70);
+  const isSoutherly = (baseDir >= 140 && baseDir <= 250);
+
+  if (isNortherly) {
+    const channelTarget = ch;
+    // Morphological channeling weight: higher in narrow gorge (0.45), lower at open sea (0.12)
+    const weight = station.isNarrows ? 0.45 : (station.lat > 41.20 || station.lat < 41.00 ? 0.12 : 0.28);
+    let diff = (channelTarget - baseDir + 540) % 360 - 180;
+    localDir = (baseDir + diff * weight + 360) % 360;
+  } else if (isSoutherly) {
+    const channelTarget = (ch + 180) % 360;
+    const weight = station.isNarrows ? 0.45 : (station.lat < 41.00 || station.lat > 41.20 ? 0.12 : 0.28);
+    let diff = (channelTarget - baseDir + 540) % 360 - 180;
+    localDir = (baseDir + diff * weight + 360) % 360;
+  }
+
+  localDir = Math.round(localDir * 10) / 10;
+  // Flow heading: direction the wind is blowing towards (downwind vector)
+  const flowHeading = Math.round((localDir + 180) % 360);
+  const sector = classifyWindSector(localDir);
+
+  return {
+    speedMs: localSpeedMs,
+    speedKmh: localSpeedKmh,
+    directionDeg: localDir,
+    flowHeading: flowHeading,
+    sectorName: sector.name,
+    sectorDesc: sector.desc,
+  };
+}
+
+/**
  * Minimalist Zoom Earth Station Badges (DivIcon)
+ * Renders authentic district wind vectors derived from real Open-Meteo API data.
  */
 function renderDistrictBadges() {
   // Clear old markers
@@ -330,20 +407,19 @@ function renderDistrictBadges() {
 
   if (!state.layers.districts) return;
 
-  const windDir = state.weather.direction_deg || 0;
-
   BOSPHORUS_STATIONS.forEach((d) => {
-    let speedVal = Math.round(d.baseSpeedKmh * ((state.weather.speed_kmh || 29.0) / 29.0));
-    if (isNaN(speedVal) || speedVal <= 0) speedVal = d.baseSpeedKmh;
-
+    const w = getStationWindData(d);
     const isNarrows = !!d.isNarrows;
 
     const iconHtml = `
       <div class="ze-station ${isNarrows ? 'ze-narrows' : ''}">
         <div class="ze-name">${isNarrows ? '⚠️ ' : ''}${d.name}</div>
-        <div class="ze-pill">
-          <span class="ze-val">${speedVal}</span>
-          <span class="ze-arr" style="transform: rotate(${windDir}deg);">↓</span>
+        <div class="ze-pill" title="${d.name}: ${w.speedKmh} km/h (${w.speedMs} m/s) • Bearing ${w.directionDeg}° (${w.sectorName})">
+          <span class="ze-val">${w.speedKmh}</span>
+          <span class="ze-unit">km/h</span>
+          <svg class="ze-arr" style="transform: rotate(${w.flowHeading}deg);" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+          </svg>
         </div>
       </div>
     `;
@@ -351,8 +427,8 @@ function renderDistrictBadges() {
     const icon = L.divIcon({
       html: iconHtml,
       className: 'ze-div-icon',
-      iconSize: [80, 36],
-      iconAnchor: [40, 18],
+      iconSize: [84, 38],
+      iconAnchor: [42, 19],
     });
 
     const marker = L.marker([d.lat, d.lon], { icon }).addTo(state.map);
@@ -374,60 +450,7 @@ function renderDistrictBadges() {
   });
 }
 
-/**
- * Render Suspension Bridges
- */
-function renderBridges() {
-  state.bridgeLayers.forEach((b) => state.map.removeLayer(b));
-  state.bridgeLayers = [];
 
-  if (!state.layers.bridges) return;
-
-  BOSPHORUS_BRIDGES.forEach((bridge) => {
-    const line = L.polyline(bridge.coords, {
-      color: bridge.color,
-      weight: 3.5,
-      opacity: 0.85,
-      dashArray: '4, 2',
-    }).addTo(state.map);
-
-    line.bindTooltip(bridge.name, {
-      permanent: false,
-      direction: 'top',
-      className: 'bg-slate-900 border border-slate-700 text-slate-100 font-mono text-xs px-2 py-1',
-    });
-
-    state.bridgeLayers.push(line);
-  });
-}
-
-/**
- * Render International TSS Fairways
- */
-function renderTSSLanes() {
-  state.tssLayers.forEach((t) => state.map.removeLayer(t));
-  state.tssLayers = [];
-
-  if (!state.layers.tss) return;
-
-  const north = L.polyline(TSS_NORTHBOUND, {
-    color: '#34d399',
-    weight: 2,
-    opacity: 0.55,
-    dashArray: '8, 8',
-  }).addTo(state.map);
-  north.bindTooltip('TSS Northbound Fairway (Asian Sector)', { className: 'bg-slate-900 text-emerald-400 font-mono text-xs' });
-
-  const south = L.polyline(TSS_SOUTHBOUND, {
-    color: '#f43f5e',
-    weight: 2,
-    opacity: 0.55,
-    dashArray: '8, 8',
-  }).addTo(state.map);
-  south.bindTooltip('TSS Southbound Fairway (European Sector)', { className: 'bg-slate-900 text-rose-400 font-mono text-xs' });
-
-  state.tssLayers.push(north, south);
-}
 
 /**
  * Zoom Earth Style Animated Wind Streamlines Engine
@@ -461,47 +484,68 @@ function renderWindStreamlines() {
   const W = state.canvas.width;
   const H = state.canvas.height;
 
-  // Clear canvas overlay for next frame
-  ctx.clearRect(0, 0, W, H);
+  // Accurate meteorological wind vectors from live Open-Meteo API:
+  // u_wind: East component (m/s), positive = Eastward (+X on screen)
+  // v_wind: North component (m/s), positive = Northward (-Y on screen)
+  let u = state.weather?.u_wind;
+  let v = state.weather?.v_wind;
 
-  // Meteorological wind direction:
-  // θ = direction from which wind blows (0° = North, 90° = East, etc.)
-  // Motion vector on screen (x = East, y = South):
-  // dx = -sin(θ), dy = +cos(θ)
-  const rad = ((state.weather.direction_deg || 0) * Math.PI) / 180.0;
-  const dx = -Math.sin(rad);
-  const dy = Math.cos(rad);
+  if (u === undefined || v === undefined || isNaN(u) || isNaN(v)) {
+    const dir = state.weather?.direction_deg || 0;
+    const spd = state.weather?.speed_ms || 5.0;
+    const rad = (dir * Math.PI) / 180.0;
+    u = -spd * Math.sin(rad);
+    v = -spd * Math.cos(rad);
+  }
 
-  const speedMult = Math.max(0.6, (state.weather.speed_kmh || 20.0) / 18.0);
+  const speedMag = Math.hypot(u, v) || 1.0;
+  // Normalized screen motion vector:
+  // Screen X = East (+u)
+  // Screen Y = South (-v, because Canvas Y increases downwards)
+  const dx = u / speedMag;
+  const dy = -v / speedMag;
+
+  const liveSpeedKmh = state.weather?.speed_kmh || (speedMag * 3.6);
+  const speedMult = Math.max(0.7, Math.min(3.5, liveSpeedKmh / 16.0));
 
   ctx.lineCap = 'round';
 
   for (const p of state.windStreamlines) {
-    const headX = p.x + dx * p.len;
-    const headY = p.y + dy * p.len;
+    // Tail is behind motion, head is forward in motion direction
+    const tailX = p.x - dx * p.len;
+    const tailY = p.y - dy * p.len;
 
-    const grad = ctx.createLinearGradient(p.x, p.y, headX, headY);
-    grad.addColorStop(0, `rgba(186, 230, 253, 0)`);
-    grad.addColorStop(0.65, `rgba(224, 242, 254, ${p.alpha * 0.5})`);
+    const grad = ctx.createLinearGradient(tailX, tailY, p.x, p.y);
+    grad.addColorStop(0, 'rgba(186, 230, 253, 0)');
+    grad.addColorStop(0.6, `rgba(224, 242, 254, ${p.alpha * 0.45})`);
     grad.addColorStop(1, `rgba(255, 255, 255, ${p.alpha * 0.95})`);
 
     ctx.strokeStyle = grad;
     ctx.lineWidth = p.width;
     ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-    ctx.lineTo(headX, headY);
+    ctx.moveTo(tailX, tailY);
+    ctx.lineTo(p.x, p.y);
     ctx.stroke();
 
+    // Bright leading head particle indicating flow direction
+    ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.width * 0.75, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Advance particle forward along the wind direction vector
     p.x += dx * p.speed * speedMult;
     p.y += dy * p.speed * speedMult;
     p.life++;
 
-    // Re-spawn with edge offset
+    // Re-spawn smoothly when particle expires or moves offscreen
     if (p.life > p.maxLife || p.x < -80 || p.x > W + 80 || p.y < -80 || p.y > H + 80) {
-      p.x = Math.random() * W - dx * (Math.random() * 120);
-      p.y = Math.random() * H - dy * (Math.random() * 120);
+      p.x = Math.random() * W - dx * (Math.random() * 150);
+      p.y = Math.random() * H - dy * (Math.random() * 150);
       p.life = 0;
       p.maxLife = 60 + Math.random() * 90;
+      p.len = 16 + Math.random() * 26;
+      p.speed = 1.8 + Math.random() * 2.2;
     }
   }
 }
@@ -652,7 +696,13 @@ function renderSimulationOverlays() {
  * 60 FPS Master Animation Loop
  */
 function animate() {
-  renderWindStreamlines();
+  if (state.ctx && state.canvas) {
+    state.ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);
+  }
+
+  if (state.layers.windFlow) {
+    renderWindStreamlines();
+  }
   renderSimulationOverlays();
 
   if (state.animating && state.animationStep < state.maxSteps) {
@@ -666,18 +716,31 @@ function animate() {
  * Live Open-Meteo Weather Synchronization
  */
 async function fetchWeatherData(force = false) {
+  const syncBtn = document.getElementById('btn-sync-weather');
+  const syncIcon = document.getElementById('sync-icon');
+  const syncText = document.getElementById('sync-text');
+
+  if (syncBtn && force) {
+    syncBtn.disabled = true;
+    if (syncIcon) syncIcon.classList.add('animate-spin');
+    if (syncText) syncText.textContent = 'Syncing...';
+  }
+
+  // 1. Direct Open-Meteo live API request (fast client-side attempt)
+  let directSuccess = false;
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-    const openMeteoUrl = 'https://api.open-meteo.com/v1/forecast?latitude=41.0422&longitude=29.0083&current=wind_speed_10m,wind_direction_10m,surface_pressure,temperature_2m,relative_humidity_2m&wind_speed_unit=ms';
+    const openMeteoUrl = 'https://api.open-meteo.com/v1/forecast?latitude=41.1600&longitude=29.0700&current=wind_speed_10m,wind_direction_10m,surface_pressure,temperature_2m,relative_humidity_2m&wind_speed_unit=ms';
     const res = await fetch(openMeteoUrl, { signal: controller.signal });
     clearTimeout(timeoutId);
 
     if (res.ok) {
       const data = await res.json();
       const cur = data.current;
-      const speed = parseFloat(cur.wind_speed_10m);
+      const rawSpeed = parseFloat(cur.wind_speed_10m);
+      const speed = Math.max(0.5, Math.round(rawSpeed * 10) / 10);
       const dir = parseFloat(cur.wind_direction_10m);
       const press = parseFloat(cur.surface_pressure || 1014.0);
       const temp = parseFloat(cur.temperature_2m || 15.0);
@@ -688,12 +751,12 @@ async function fetchWeatherData(force = false) {
       const sector = classifyWindSector(dir);
       const category = classifyBeaufort(speed);
       const kmh = Math.round(speed * 3.6);
-      const kts = (speed * 1.94384).toFixed(1);
+      const kts = Math.round(speed * 1.94384 * 10) / 10;
 
       state.weather = {
-        speed_ms: Math.round(speed * 10) / 10,
+        speed_ms: speed,
         speed_kmh: kmh,
-        speed_knots: parseFloat(kts),
+        speed_knots: kts,
         direction_deg: Math.round(dir * 10) / 10,
         u_wind: Math.round(u * 100) / 100,
         v_wind: Math.round(v * 100) / 100,
@@ -706,38 +769,85 @@ async function fetchWeatherData(force = false) {
       };
       updateWeatherUI();
       renderDistrictBadges();
-      return;
+      initWindStreamlines();
+      directSuccess = true;
     }
   } catch (err) {
-    console.warn('Direct Open-Meteo fetch failed, using fallback:', err);
+    console.warn('Direct Open-Meteo fetch failed, attempting server proxy:', err);
   }
 
-  // Fallback to /api/weather
-  try {
-    const res = await fetch('/api/weather');
-    if (res.ok) {
-      const data = await res.json();
-      const kmh = Math.round(data.speed_ms * 3.6);
-      state.weather = {
-        speed_ms: data.speed_ms,
-        speed_kmh: kmh,
-        speed_knots: parseFloat((data.speed_ms * 1.94384).toFixed(1)),
-        direction_deg: data.direction_deg,
-        u_wind: data.u_wind,
-        v_wind: data.v_wind,
-        sector_name: data.sector_name,
-        sector_description: data.sector_description || '',
-        speed_category: data.speed_category || classifyBeaufort(data.speed_ms),
-        surface_pressure_hpa: data.surface_pressure_hpa || 1014.0,
-        temperature_c: 15.0,
-        source: data.source || 'cached',
-      };
-      updateWeatherUI();
-      renderDistrictBadges();
+  // 2. Resilient Server-Side Proxy Fallback (/api/weather?force=true)
+  if (!directSuccess) {
+    try {
+      const endpoint = force ? '/api/weather?force=true' : '/api/weather';
+      const res = await fetch(endpoint);
+      if (res.ok) {
+        const data = await res.json();
+        const rawSpeed = parseFloat(data.speed_ms);
+        const speed = Math.max(0.5, Math.round(rawSpeed * 10) / 10);
+        const kmh = Math.round(speed * 3.6);
+        const kts = Math.round(speed * 1.94384 * 10) / 10;
+        const dir = parseFloat(data.direction_deg);
+        const rad = (dir * Math.PI) / 180.0;
+        const u = -speed * Math.sin(rad);
+        const v = -speed * Math.cos(rad);
+
+        state.weather = {
+          speed_ms: speed,
+          speed_kmh: kmh,
+          speed_knots: kts,
+          direction_deg: dir,
+          u_wind: Math.round(u * 100) / 100,
+          v_wind: Math.round(v * 100) / 100,
+          sector_name: data.sector_name,
+          sector_description: data.sector_description || '',
+          speed_category: data.speed_category || classifyBeaufort(speed),
+          surface_pressure_hpa: data.surface_pressure_hpa || 1014.0,
+          temperature_c: 15.0,
+          source: data.source || 'cached',
+        };
+        updateWeatherUI();
+        renderDistrictBadges();
+        initWindStreamlines();
+      }
+    } catch (err) {
+      console.error('All weather sources failed:', err);
     }
-  } catch (err) {
-    console.error('All weather sources failed:', err);
   }
+
+  // Update sync timestamp and toast feedback
+  const timeStr = new Date().toLocaleTimeString();
+  const tsEl = document.getElementById('sync-timestamp');
+  if (tsEl) tsEl.textContent = `Last: ${timeStr}`;
+
+  if (syncBtn && force) {
+    if (syncIcon) syncIcon.classList.remove('animate-spin');
+    if (syncText) syncText.textContent = `✓ Synced! (${timeStr})`;
+    showSyncToast(`Open-Meteo Live API Synchronized: ${state.weather.speed_kmh} km/h ${state.weather.sector_name.toUpperCase()} (${state.weather.direction_deg}°) | Pressure: ${state.weather.surface_pressure_hpa} hPa`, state.weather.source === 'live');
+    setTimeout(() => {
+      if (syncText) syncText.textContent = 'Sync API';
+      if (syncBtn) syncBtn.disabled = false;
+    }, 2000);
+  }
+}
+
+function showSyncToast(message, isLive = true) {
+  let toast = document.getElementById('sync-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'sync-toast';
+    toast.className = 'fixed top-14 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg border shadow-2xl font-mono text-xs flex items-center space-x-2 transition-all duration-300 pointer-events-none';
+    document.body.appendChild(toast);
+  }
+  toast.className = `fixed top-14 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg border shadow-2xl font-mono text-xs flex items-center space-x-2 transition-all duration-300 pointer-events-none ${
+    isLive ? 'bg-slate-900/95 border-emerald-500 text-emerald-300' : 'bg-slate-900/95 border-amber-500 text-amber-300'
+  }`;
+  toast.innerHTML = `<span>${isLive ? '📡' : '⚠️'}</span><span>${message}</span>`;
+  toast.style.opacity = '1';
+  clearTimeout(state._toastTimer);
+  state._toastTimer = setTimeout(() => {
+    toast.style.opacity = '0';
+  }, 3500);
 }
 
 function classifyWindSector(deg) {
@@ -800,7 +910,8 @@ function updateWeatherUI() {
   const zwSpeed = document.getElementById('zoom-wind-speed-val');
   if (zwSpeed) zwSpeed.textContent = `${w.speed_kmh} km/h`;
   const zwArrow = document.getElementById('zoom-wind-arrow');
-  if (zwArrow) zwArrow.style.transform = `rotate(${w.direction_deg}deg)`;
+  const flowHeading = Math.round((w.direction_deg + 180) % 360);
+  if (zwArrow) zwArrow.style.transform = `rotate(${flowHeading}deg)`;
   const zwDir = document.getElementById('zoom-wind-dir-name');
   if (zwDir) zwDir.textContent = `${w.direction_deg}° (${w.sector_name.toUpperCase()})`;
 }
@@ -837,8 +948,17 @@ async function handleForwardSubmit(e) {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      const err = await res.json();
-      alert(`Simulation Error (${res.status}): ${err.detail || err.error}`);
+      let errMsg = `Server returned status ${res.status}`;
+      try {
+        const text = await res.text();
+        try {
+          const err = JSON.parse(text);
+          errMsg = err.detail || err.error || errMsg;
+        } catch {
+          if (text) errMsg = text.slice(0, 200);
+        }
+      } catch {}
+      alert(`Simulation Error (${res.status}): ${errMsg}`);
       return;
     }
     state.currentSim = await res.json();
@@ -858,10 +978,16 @@ async function handleReverseSubmit(e) {
   const btn = document.getElementById('btn-submit-reverse');
   if (btn) btn.disabled = true;
 
+  const rawLat = parseFloat(document.getElementById('rev-lat').value);
+  const rawLon = parseFloat(document.getElementById('rev-lon').value);
+  const snapped = snapToBosphorusWater(rawLat, rawLon);
+  document.getElementById('rev-lat').value = snapped.lat.toFixed(4);
+  document.getElementById('rev-lon').value = snapped.lon.toFixed(4);
+
   const payload = {
     entity_type: document.getElementById('rev-entity').value,
-    last_lat: parseFloat(document.getElementById('rev-lat').value),
-    last_lon: parseFloat(document.getElementById('rev-lon').value),
+    last_lat: snapped.lat,
+    last_lon: snapped.lon,
     particles: parseInt(document.getElementById('rev-particles').value, 10),
     hours_back: parseFloat(document.getElementById('rev-hours').value),
     dt: parseFloat(document.getElementById('rev-dt').value),
@@ -880,8 +1006,17 @@ async function handleReverseSubmit(e) {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      const err = await res.json();
-      alert(`Reverse Tracking Error (${res.status}): ${err.detail || err.error}`);
+      let errMsg = `Server returned status ${res.status}`;
+      try {
+        const text = await res.text();
+        try {
+          const err = JSON.parse(text);
+          errMsg = err.detail || err.error || errMsg;
+        } catch {
+          if (text) errMsg = text.slice(0, 200);
+        }
+      } catch {}
+      alert(`Reverse Tracking Error (${res.status}): ${errMsg}`);
       return;
     }
     state.currentSim = await res.json();
@@ -901,11 +1036,24 @@ async function handleRouteSubmit(e) {
   const btn = document.getElementById('btn-submit-route');
   if (btn) btn.disabled = true;
 
+  const rawStartLat = parseFloat(document.getElementById('route-start-lat').value);
+  const rawStartLon = parseFloat(document.getElementById('route-start-lon').value);
+  const rawEndLat = parseFloat(document.getElementById('route-end-lat').value);
+  const rawEndLon = parseFloat(document.getElementById('route-end-lon').value);
+
+  const startSnap = snapToBosphorusWater(rawStartLat, rawStartLon);
+  const endSnap = snapToBosphorusWater(rawEndLat, rawEndLon);
+
+  document.getElementById('route-start-lat').value = startSnap.lat.toFixed(4);
+  document.getElementById('route-start-lon').value = startSnap.lon.toFixed(4);
+  document.getElementById('route-end-lat').value = endSnap.lat.toFixed(4);
+  document.getElementById('route-end-lon').value = endSnap.lon.toFixed(4);
+
   const payload = {
-    start_lat: parseFloat(document.getElementById('route-start-lat').value),
-    start_lon: parseFloat(document.getElementById('route-start-lon').value),
-    end_lat: parseFloat(document.getElementById('route-end-lat').value),
-    end_lon: parseFloat(document.getElementById('route-end-lon').value),
+    start_lat: startSnap.lat,
+    start_lon: startSnap.lon,
+    end_lat: endSnap.lat,
+    end_lon: endSnap.lon,
     vessel_speed_knots: parseFloat(document.getElementById('route-speed').value),
     head_current_penalty: parseFloat(document.getElementById('route-penalty').value),
   };
@@ -917,8 +1065,17 @@ async function handleRouteSubmit(e) {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      const err = await res.json();
-      alert(`Routing Error (${res.status}): ${err.detail || err.error}`);
+      let errMsg = `Server returned status ${res.status}`;
+      try {
+        const text = await res.text();
+        try {
+          const err = JSON.parse(text);
+          errMsg = err.detail || err.error || errMsg;
+        } catch {
+          if (text) errMsg = text.slice(0, 200);
+        }
+      } catch {}
+      alert(`Routing Error (${res.status}): ${errMsg}`);
       return;
     }
     state.currentRoute = await res.json();
@@ -1015,10 +1172,16 @@ function switchTab(tabId) {
 
 function setupLayerToggles() {
   const toggles = [
-    { id: 'toggle-layer-wind-flow', key: 'windFlow' },
+    {
+      id: 'toggle-layer-wind-flow',
+      key: 'windFlow',
+      onChange: () => {
+        if (!state.layers.windFlow && state.ctx && state.canvas) {
+          state.ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);
+        }
+      },
+    },
     { id: 'toggle-layer-districts', key: 'districts', onChange: renderDistrictBadges },
-    { id: 'toggle-layer-bridges', key: 'bridges', onChange: renderBridges },
-    { id: 'toggle-layer-tss', key: 'tss', onChange: renderTSSLanes },
   ];
 
   toggles.forEach(({ id, key, onChange }) => {
@@ -1085,10 +1248,11 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchWeatherData(true);
   });
 
-  // Periodic Weather Refresh (Every 60s)
+  // Periodic Weather Refresh: Automatically pull fresh meteorological observations every 15 minutes
+  const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
   setInterval(() => {
-    fetchWeatherData(false);
-  }, 60000);
+    fetchWeatherData(true);
+  }, FIFTEEN_MINUTES_MS);
 
   // Start 60 FPS Rendering Loop
   requestAnimationFrame(animate);

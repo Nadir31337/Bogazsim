@@ -477,10 +477,10 @@ def get_health() -> dict[str, Any]:
 
 
 @app.get("/api/weather")
-def get_weather() -> dict[str, Any]:
+def get_weather(force: bool = False) -> dict[str, Any]:
     """Retrieve current Bosphorus wind observations or synthetic regime."""
     client = get_weather_client()
-    return client.get_current_wind()
+    return client.get_current_wind(force_refresh=force)
 
 
 @app.get("/api/grid")

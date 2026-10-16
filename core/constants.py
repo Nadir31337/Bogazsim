@@ -34,7 +34,7 @@ EARTH_RADIUS_METERS: Final[float] = 6_371_000.0
 # ---------------------------------------------------------------------------
 # The Rumeli Hisarı – Anadolu Hisarı constriction (narrowest throat of the strait)
 CONSTRICTION_LAT: Final[float] = 41.085
-CONSTRICTION_LON: Final[float] = 29.0786
+CONSTRICTION_LON: Final[float] = 29.0565
 
 # Strait navigable width parameters (in meters)
 MIN_STRAIT_WIDTH_M: Final[float] = 700.0   # Width at Rumeli Hisarı
@@ -115,7 +115,7 @@ OPEN_METEO_URL: Final[str] = (
     "past_days=1&wind_speed_unit=ms"
 )
 
-WEATHER_CACHE_TTL_SECONDS: Final[int] = 600  # 10 minutes cache expiration
+WEATHER_CACHE_TTL_SECONDS: Final[int] = 900  # 15 minutes cache expiration
 WEATHER_REQUEST_TIMEOUT_SECONDS: Final[float] = 5.0
 
 # Canonical Istanbul Wind Sectors (Direction in degrees from True North)

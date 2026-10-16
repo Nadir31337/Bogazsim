@@ -29,7 +29,7 @@
             }
         }
     </script>
-    <link rel="stylesheet" href="/static/css/styles.css?v=6">
+    <link rel="stylesheet" href="/static/css/styles.css?v=8">
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-cyan-500 selection:text-slate-950">
     <!-- Top Navigation & Telemetry Bar -->
@@ -49,9 +49,13 @@
                 <span id="weather-status" class="text-emerald-400 font-semibold">POYRAZ (45° NE 8.5 m/s)</span>
                 <span id="weather-source-badge" class="text-[10px] uppercase px-1.5 py-0.2 rounded bg-emerald-950 border border-emerald-700 text-emerald-300">LIVE</span>
             </div>
-            <button id="btn-sync-weather" title="Re-fetch live Open-Meteo wind data" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-cyan-400 transition-colors">
-                ↻ Sync API
-            </button>
+            <div class="flex items-center space-x-2">
+                <button id="btn-sync-weather" title="Fetch live satellite & weather model observations from Open-Meteo" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-cyan-400 transition-colors flex items-center space-x-1.5 font-medium text-xs">
+                    <span id="sync-icon" class="inline-block">↻</span>
+                    <span id="sync-text">Sync API</span>
+                </button>
+                <span id="sync-timestamp" class="text-[10px] text-slate-400 font-mono hidden md:inline">Last: --:--:--</span>
+            </div>
             <div class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 hidden lg:block">
                 <span>GRID: </span><span class="text-cyan-400">120×160 (250m)</span>
             </div>
@@ -315,8 +319,6 @@
                     <div class="flex items-center space-x-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-[11px]">
                         <button id="toggle-layer-wind-flow" class="layer-pill active px-2.5 py-1 rounded transition-all">Wind Streamlines</button>
                         <button id="toggle-layer-districts" class="layer-pill active px-2.5 py-1 rounded transition-all">District Wind Badges</button>
-                        <button id="toggle-layer-bridges" class="layer-pill active px-2.5 py-1 rounded transition-all">Bridges</button>
-                        <button id="toggle-layer-tss" class="layer-pill active px-2.5 py-1 rounded transition-all">TSS Fairways</button>
                     </div>
                     <div class="flex items-center space-x-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-[11px]">
                         <span class="text-slate-400 px-1 text-[10px] uppercase font-semibold">Map:</span>
@@ -343,9 +345,11 @@
                 <!-- Zoom Earth Top Right Live Wind Speed Badge -->
                 <div id="zoom-wind-status-badge" class="absolute top-4 right-4 z-20 pointer-events-auto bg-slate-900/90 backdrop-blur border border-slate-700/80 rounded-lg px-3.5 py-2 shadow-2xl text-xs font-mono flex items-center space-x-2.5">
                     <span class="text-slate-400">WIND:</span>
-                    <span id="zoom-wind-speed-val" class="font-bold text-cyan-300 text-sm">29 km/h</span>
-                    <span id="zoom-wind-arrow" class="inline-block transition-transform duration-500 font-bold text-amber-400 text-base">↓</span>
-                    <span id="zoom-wind-dir-name" class="font-semibold text-emerald-400">N (YILDIZ)</span>
+                    <span id="zoom-wind-speed-val" class="font-bold text-cyan-300 text-sm">-- km/h</span>
+                    <svg id="zoom-wind-arrow" class="w-4 h-4 text-amber-400 inline-block transition-transform duration-500" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+                    </svg>
+                    <span id="zoom-wind-dir-name" class="font-semibold text-emerald-400">--</span>
                 </div>
 
                 <!-- Zoom Earth Bottom Left Wind Speed Color Scale Legend -->
@@ -392,6 +396,6 @@
     <!-- Leaflet JS CDN -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- Client Scripts -->
-    <script src="/static/js/dashboard.js?v=6"></script>
+    <script src="/static/js/dashboard.js?v=16"></script>
 </body>
 </html>
