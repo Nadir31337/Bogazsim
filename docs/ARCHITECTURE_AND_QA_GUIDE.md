@@ -274,7 +274,7 @@ flowchart TD
 
 ### Q22: How does the application prevent magic numbers and unhandled 500 server crashes?
 > **Answer**:
-> 1. **Zero Magic Numbers**: All physical parameters, geographic bounds, time intervals, default speeds, and colors are centralized as typed `Final` constants in [`core/constants.py`](core/constants.py).
+> 1. **Zero Magic Numbers**: All physical parameters, geographic bounds, time intervals, default speeds, and colors are centralized as typed `Final` constants in [`core/constants.py`](../core/constants.py).
 > 2. **Pydantic v2 Schema Validation**: Request models enforce strict field boundaries (`ge` and `le`) at the ASGI layer, immediately returning HTTP 422 Unprocessable Entity for invalid parameters before any domain logic executes.
 > 3. **Custom Exception Hierarchy**: Domain violations raise explicit exceptions (`LandCollisionError`, `GridBoundsError`, `RouteNotFoundError`, `WeatherAPIError`) derived from `BogazSimError`. Custom FastAPI exception handlers map each domain exception to semantic HTTP status codes (400, 404, 422, 502) with structured JSON error details, preventing unhandled 500 server errors.
 
